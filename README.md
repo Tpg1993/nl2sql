@@ -3,7 +3,7 @@
 An agentic AI application that translates plain English questions into SQL queries, executes them against an Electronic Health Records (EHR) database, and renders the results dynamically. Powered by **LangGraph**, **LangChain**, **FastAPI**, and **Sarvam AI / OpenAI**.
 
 > [!NOTE]
-> For a detailed log of feature focus, database engines, and configurations across the development branches (v1, v2, and v3), please refer to [versions.md](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md).
+> For a detailed log of feature focus, database engines, and configurations across the development branches (v1, v2, and v3), please refer to [versions.md](versions.md).
 
 
 ## Features
