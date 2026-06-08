@@ -441,8 +441,8 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                         <summary>
                             <span class="summary-title">
                                 ${cached 
-                                    ? `<i class="fa-solid fa-cloud-bolt"></i> Saved Token Usage (Cache Hit!)` 
-                                    : `<i class="fa-solid fa-bolt"></i> Token Usage Details`
+                                    ? `<i class="fa-solid fa-cloud-bolt"></i> Token & Latency Details (Cache Hit!)` 
+                                    : `<i class="fa-solid fa-bolt"></i> Token & Latency Details`
                                 }
                             </span>
                             <i class="fa-solid fa-chevron-down summary-arrow"></i>
