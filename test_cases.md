@@ -109,3 +109,56 @@ This document lists categorized test cases (from simple counts to multi-table jo
     WHERE a.allergen_name LIKE '%Penicillin%' AND a.is_active = 1;
     ```
 *   **Why it tests**: Verifies fuzzy text pattern matching (`LIKE '%...%'`) combined with state boolean conditions.
+
+### Test Case 3.4: Department Provider & Encounter Statistics
+*   **Question**: `List all departments, showing their name, the total number of providers, and the total number of encounters handled in each.`
+*   **Expected SQL**:
+    ```sql
+    SELECT d.department_name, COUNT(DISTINCT pr.id) as provider_count, COUNT(e.id) as encounter_count
+    FROM departments d
+    LEFT JOIN providers pr ON d.id = pr.department_id
+    LEFT JOIN encounters e ON pr.id = e.provider_id
+    GROUP BY d.id, d.department_name;
+    ```
+*   **Why it tests**: Verifies three-table joins with count aggregations and proper grouping.
+
+### Test Case 3.5: Lisinopril and Hypertension Patient Count
+*   **Question**: `What is the count of patients diagnosed with 'Essential hypertension' who are currently taking 'Lisinopril'?`
+*   **Expected SQL**:
+    ```sql
+    SELECT COUNT(DISTINCT p.id) 
+    FROM patients p
+    JOIN diagnoses d ON p.id = d.patient_id
+    JOIN medications m ON p.id = m.patient_id
+    WHERE d.description = 'Essential hypertension' AND m.name = 'Lisinopril';
+    ```
+*   **Why it tests**: Requires joining the patient demographics table with two separate clinical log tables (diagnoses and medications) simultaneously.
+
+---
+
+## 4. Advanced Self-Healing & Dialect-Specific Retries
+
+These queries are intentionally designed to challenge the agent's schema mapping or SQL dialect execution. They trigger the backend self-healing loops to heal syntax/column discrepancies and execute successfully on retry (registering as `Retries: 1` or `2` in the UI).
+
+### Test Case 4.1: Concatenation and Ambiguous Column Names
+*   **Question**: `List the patient name and provider name for encounters in 2023.`
+*   **Why it triggers retry**: The LLM will initially generate a query selecting `patients.name` or `providers.name` (which do not exist in the database). The agent catches the database error, inspects the schema to see that patient names consist of `first_name` and `last_name`, and corrects the query to use concatenation (e.g. `p.first_name || ' ' || p.last_name`).
+*   **Expected Resolved SQL**:
+    ```sql
+    SELECT p.first_name || ' ' || p.last_name AS patient_name, pr.first_name || ' ' || pr.last_name AS provider_name 
+    FROM encounters e 
+    JOIN patients p ON e.patient_id = p.id 
+    JOIN providers pr ON e.provider_id = pr.id 
+    WHERE strftime('%Y', e.encounter_date) = '2023';
+    ```
+
+### Test Case 4.2: Dialect-Specific Date Calculations
+*   **Question**: `What is the average age of patients diagnosed with Hypertension?`
+*   **Why it triggers retry**: The LLM may initially output standard SQL functions like `DATEDIFF` or `AGE()` which are incompatible with SQLite. The database run throws a syntax error, which the agent catches and corrects using SQLite-specific date operations (e.g. `strftime('%Y', 'now') - strftime('%Y', birth_date)`).
+*   **Expected Resolved SQL**:
+    ```sql
+    SELECT AVG(strftime('%Y', 'now') - strftime('%Y', p.birth_date)) AS average_age
+    FROM patients p
+    JOIN diagnoses d ON p.id = d.patient_id
+    WHERE d.description LIKE '%Hypertension%';
+    ```
