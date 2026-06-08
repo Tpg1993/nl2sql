@@ -68,7 +68,7 @@ function renderSchema(schema) {
         header.innerHTML = `
             <div class="table-name-wrapper">
                 <i class="fa-solid fa-table table-icon"></i>
-                <span>${tableName}</span>
+                <span class="schema-helper-link" title="Click to insert table name">${tableName}</span>
             </div>
             <i class="fa-solid fa-chevron-right chevron-icon"></i>
         `;
@@ -80,7 +80,14 @@ function renderSchema(schema) {
         columns.forEach(col => {
             const colLi = document.createElement("li");
             colLi.className = "column-item";
-            colLi.textContent = col;
+            colLi.innerHTML = `<span class="schema-helper-link" title="Click to insert column name">${col}</span>`;
+            
+            // Column insertion helper
+            colLi.querySelector(".schema-helper-link").addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                insertSchemaTerm(col);
+            });
+            
             colList.appendChild(colLi);
         });
         
@@ -88,11 +95,31 @@ function renderSchema(schema) {
         header.addEventListener("click", () => {
             li.classList.toggle("active");
         });
+
+        // Table insertion helper
+        const helperLink = header.querySelector(".schema-helper-link");
+        helperLink.addEventListener("click", (evt) => {
+            evt.stopPropagation(); // Prevent toggling columns
+            insertSchemaTerm(tableName);
+        });
         
         li.appendChild(header);
         li.appendChild(colList);
         tableListContainer.appendChild(li);
     });
+}
+
+// Append clicked terms into the search bar
+function insertSchemaTerm(term) {
+    const currentText = userInput.value;
+    if (!currentText) {
+        userInput.value = term + " ";
+    } else if (currentText.endsWith(" ")) {
+        userInput.value = currentText + term + " ";
+    } else {
+        userInput.value = currentText + " " + term + " ";
+    }
+    userInput.focus();
 }
 
 // Show Error in Sidebar
@@ -156,7 +183,7 @@ async function submitQuestion(question) {
         
         const data = await response.json();
         if (data.success) {
-            appendAssistantResponse(data.query, data.result, data.tokens, data.cached);
+            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms);
         } else {
             appendAssistantError(data.error || "An error occurred during query generation.");
         }
@@ -259,8 +286,57 @@ function extractHeaders(sql) {
     });
 }
 
+// Custom Regex SQL syntax highlighter
+function highlightSQL(sql) {
+    if (!sql) return "";
+    
+    // Escape HTML special characters
+    let html = sql
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    
+    // Placeholders for strings to prevent double formatting
+    const strings = [];
+    html = html.replace(/('(?:''|[^'])*')/g, (match) => {
+        strings.push(match);
+        return `__SQL_STRING_${strings.length - 1}__`;
+    });
+    
+    // Placeholders for numbers
+    const numbers = [];
+    html = html.replace(/\b(\d+)\b/g, (match) => {
+        numbers.push(match);
+        return `__SQL_NUMBER_${numbers.length - 1}__`;
+    });
+    
+    // Highlight Keywords
+    const keywords = [
+        "SELECT", "FROM", "WHERE", "JOIN", "ON", "GROUP BY", "ORDER BY", "LIMIT",
+        "AND", "OR", "COUNT", "AVG", "SUM", "MIN", "MAX", "AS", "DISTINCT", "BY", 
+        "LEFT", "RIGHT", "INNER", "OUTER", "HAVING", "LIKE", "IN", "IS", "NULL", "NOT"
+    ];
+    
+    keywords.forEach(kw => {
+        const regex = new RegExp(`\\b(${kw})\\b`, "gi");
+        html = html.replace(regex, '<span class="sql-keyword">$1</span>');
+    });
+    
+    // Restore numbers with styling
+    numbers.forEach((num, idx) => {
+        html = html.replace(`__SQL_NUMBER_${idx}__`, `<span class="sql-number">${num}</span>`);
+    });
+    
+    // Restore strings with styling
+    strings.forEach((str, idx) => {
+        html = html.replace(`__SQL_STRING_${idx}__`, `<span class="sql-string">${str}</span>`);
+    });
+    
+    return html;
+}
+
 // Append Assistant Success Response bubble (SQL, Table, and Tokens)
-function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false) {
+function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null) {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
@@ -319,7 +395,8 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false) 
         </div>
         <div class="message-content" style="flex: 1;">
             <div class="bubble" style="width: 100%;">
-                <p>The query compiled and executed successfully. Here are the details:</p>
+                <!-- Conversational Summary response -->
+                ${summary ? `<div class="assistant-summary">${summary}</div>` : `<p>The query compiled and executed successfully. Here are the details:</p>`}
                 
                 <!-- SQL Statement Card -->
                 <div class="sql-panel">
@@ -329,7 +406,7 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false) 
                             <i class="fa-regular fa-copy"></i> Copy
                         </button>
                     </div>
-                    <pre><code>${sqlQuery}</code></pre>
+                    <pre><code>${highlightSQL(sqlQuery)}</code></pre>
                 </div>
                 
                 <!-- Query Result Table -->
@@ -337,7 +414,7 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false) 
                     ${tableHtml}
                 </div>
                 
-                <!-- Token Usage (Collapsible) -->
+                <!-- Token Usage & Latency Details -->
                 ${tokens ? `
                 <div class="token-details-container ${cached ? 'cached-hit' : ''}">
                     <details class="token-details" ${cached ? 'open' : ''}>
@@ -364,6 +441,12 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false) 
                                 <span class="stat-value">${tokens.total || '0'}</span>
                             </div>
                         </div>
+                        
+                        <div class="latency-info-row">
+                            <i class="fa-regular fa-clock"></i>
+                            <span>Execution Latency: <strong>${latencyMs !== null ? latencyMs + ' ms' : 'N/A'}</strong></span>
+                        </div>
+
                         ${cached ? `
                         <div class="cache-saving-banner">
                             <i class="fa-solid fa-piggy-bank"></i>

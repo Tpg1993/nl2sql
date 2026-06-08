@@ -963,3 +963,83 @@ body[data-theme="light"] .theme-toggle-btn:hover {
 .cache-saving-banner i {
     font-size: 0.95rem;
 }
+
+/* =====================================================================
+   INTERACTIVE SCHEMA CLICK LINKS
+   ===================================================================== */
+.schema-helper-link {
+    cursor: pointer;
+    position: relative;
+    transition: var(--transition-smooth);
+}
+
+.schema-helper-link:hover {
+    color: var(--accent-secondary) !important;
+    text-decoration: underline;
+}
+
+/* =====================================================================
+   ASSISTANT CONVERSATIONAL SUMMARY TEXT
+   ===================================================================== */
+.assistant-summary {
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.6;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--border-glass);
+}
+
+body[data-theme="light"] .assistant-summary {
+    border-color: rgba(15, 23, 42, 0.08);
+}
+
+/* =====================================================================
+   EXECUTION LATENCY INFO ROW
+   ===================================================================== */
+.latency-info-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    padding: 10px 14px;
+    border-top: 1px solid var(--border-glass);
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+body[data-theme="light"] .latency-info-row {
+    border-color: rgba(15, 23, 42, 0.08);
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* =====================================================================
+   SQL CODE SYNTAX HIGHLIGHT COLORS
+   ===================================================================== */
+.sql-keyword {
+    color: #F43F5E; /* Vibrant rose/red for SQL keywords */
+    font-weight: 600;
+}
+
+.sql-string {
+    color: #34D399; /* Soft green for text strings */
+}
+
+.sql-number {
+    color: #FBBF24; /* Warm gold for integer and numeric values */
+    font-weight: 500;
+}
+
+body[data-theme="light"] .sql-keyword {
+    color: #BE123C; /* Darker red in light mode */
+}
+
+body[data-theme="light"] .sql-string {
+    color: #047857; /* Darker emerald in light mode */
+}
+
+body[data-theme="light"] .sql-number {
+    color: #D97706; /* Darker amber in light mode */
+}
+

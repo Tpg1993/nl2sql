@@ -4,7 +4,17 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
-## [v3_sarvam_redis_cache](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md#v3_sarvam_redis_cache) (Current Branch)
+## [v4_sarvam_enhanced_agent](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md#v4_sarvam_enhanced_agent) (Current Branch)
+*   **Release Focus**: Self-healing agent loops, clinical summaries, latency metrics, interactive schema browser, and syntax highlighting.
+*   **Self-Healing Loop**: Tracks query failures using a custom `AgentState` retry counter. If SQL execution fails, the agent routes back to the LLM with error context to heal the syntax automatically.
+*   **Conversational Summaries**: Adds a `summarize_results` node to synthesize raw table outcomes into natural language clinical summaries.
+*   **Performance Tracking**: Computes millisecond database latencies, showing real-time latencies on-screen.
+*   **Interactive Sidebar**: Clicking any sidebar table or column appends it directly to the chat input and focuses it.
+*   **SQL Syntax Highlighting**: Custom regex SQL tokenizer dynamically colors keywords, strings, and integers for maximum readability.
+
+---
+
+## [v3_sarvam_redis_cache](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md#v3_sarvam_redis_cache)
 *   **Release Focus**: Production-ready hybrid query caching, cost-savings visuals, and UI theme controls.
 *   **Database Engine**: Works on both local SQLite and remote Databricks SQL Warehouse.
 *   **Caching Layer**:

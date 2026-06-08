@@ -14,8 +14,8 @@ class BaseCacheManager(ABC):
         pass
 
     @abstractmethod
-    def set(self, question: str, query: str, result: any, tokens: dict | None) -> None:
-        """Store query details, database results, and token usage in the cache."""
+    def set(self, question: str, query: str, result: any, summary: str, tokens: dict | None) -> None:
+        """Store query details, database results, conversational summaries, and token usage in the cache."""
         pass
 
     @abstractmethod
@@ -26,7 +26,7 @@ class BaseCacheManager(ABC):
 
 class SQLiteCacheManager(BaseCacheManager):
     """A lightweight SQLite cache manager to persist natural language questions,
-    their compiled SQL queries, database results, and token metrics.
+    their compiled SQL queries, database results, conversational summaries, and token metrics.
     """
 
     def __init__(self, cache_db_path: str = None, ttl_seconds: int = 3600) -> None:
@@ -47,6 +47,7 @@ class SQLiteCacheManager(BaseCacheManager):
                     question TEXT,
                     query TEXT,
                     result TEXT,
+                    summary TEXT,
                     tokens TEXT,
                     created_at REAL
                 )
@@ -64,13 +65,13 @@ class SQLiteCacheManager(BaseCacheManager):
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT query, result, tokens, created_at FROM query_cache WHERE key_hash = ?",
+                    "SELECT query, result, summary, tokens, created_at FROM query_cache WHERE key_hash = ?",
                     (key_hash,)
                 )
                 row = cursor.fetchone()
                 
                 if row:
-                    query, result_json, tokens_json, created_at = row
+                    query, result_json, summary, tokens_json, created_at = row
                     age = time.time() - created_at
                     
                     if age <= self.ttl:
@@ -78,6 +79,7 @@ class SQLiteCacheManager(BaseCacheManager):
                         return {
                             "query": query,
                             "result": json.loads(result_json) if result_json else [],
+                            "summary": summary or "",
                             "tokens": json.loads(tokens_json) if tokens_json else None
                         }
                     else:
@@ -88,7 +90,7 @@ class SQLiteCacheManager(BaseCacheManager):
             
         return None
 
-    def set(self, question: str, query: str, result: any, tokens: dict | None) -> None:
+    def set(self, question: str, query: str, result: any, summary: str, tokens: dict | None) -> None:
         """Stores query details and results in the cache."""
         if self.ttl <= 0:
             return  # Caching is disabled
@@ -98,12 +100,13 @@ class SQLiteCacheManager(BaseCacheManager):
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
-                    "INSERT OR REPLACE INTO query_cache (key_hash, question, query, result, tokens, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO query_cache (key_hash, question, query, result, summary, tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         key_hash,
                         question.strip(),
                         query,
                         json.dumps(result),
+                        summary,
                         json.dumps(tokens) if tokens else None,
                         time.time()
                     )
@@ -163,7 +166,7 @@ class RedisCacheManager(BaseCacheManager):
             print(f"Error reading from Redis cache: {e}")
         return None
 
-    def set(self, question: str, query: str, result: any, tokens: dict | None) -> None:
+    def set(self, question: str, query: str, result: any, summary: str, tokens: dict | None) -> None:
         """Stores query details and results in Redis with TTL expiration."""
         if self.ttl <= 0:
             return
@@ -172,6 +175,7 @@ class RedisCacheManager(BaseCacheManager):
         payload = {
             "query": query,
             "result": result,
+            "summary": summary,
             "tokens": tokens
         }
         

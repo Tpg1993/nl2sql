@@ -1,4 +1,5 @@
 import ast
+import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -27,7 +28,6 @@ try:
     agent = EHRQueryAgent()
 except Exception as e:
     print(f"Error initializing agent: {e}")
-    # We will initialize it lazily in routes if needed, or raise
     agent = None
 
 # Initialize cache manager (defaults to 1 hour TTL)
@@ -36,7 +36,6 @@ try:
 except Exception as e:
     print(f"Error initializing cache manager: {e}")
     cache_manager = None
-
 
 
 class QueryRequest(BaseModel):
@@ -69,30 +68,37 @@ def get_metadata():
 
 @app.post("/api/query")
 def run_query(request: QueryRequest):
-    """Query the agent with a natural language prompt."""
+    """Query the agent with a natural language prompt, returning execution latency and conversational response summary."""
     if not agent:
         raise HTTPException(status_code=500, detail="Database agent is not initialized.")
     
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
+    start_time = time.perf_counter()
+
     # 1. Attempt to serve from Cache
     if cache_manager:
         cached = cache_manager.get(request.question)
         if cached:
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
             return {
                 "query": cached.get("query"),
                 "result": cached.get("result"),
+                "summary": cached.get("summary", ""),
                 "tokens": cached.get("tokens"),
                 "success": True,
                 "cached": True,
+                "latency_ms": elapsed_ms,
                 "error": None
             }
 
     # 2. Run agent if cache miss
     try:
         res = agent.query_detailed(request.question)
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
         raw_result = res["result"]
+        conversational_summary = res.get("summary", "")
         
         # Check if the execution returned a query error
         success = True
@@ -116,19 +122,24 @@ def run_query(request: QueryRequest):
                 question=request.question,
                 query=res["query"],
                 result=parsed_data,
+                summary=conversational_summary,
                 tokens=res["tokens"]
             )
 
         return {
             "query": res["query"],
             "result": parsed_data,
+            "summary": conversational_summary,
             "tokens": res["tokens"],
             "success": success,
             "cached": False,
+            "latency_ms": elapsed_ms,
             "error": error_message
         }
     except Exception as e:
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
         return {
             "error": str(e),
-            "success": False
+            "success": False,
+            "latency_ms": elapsed_ms
         }

@@ -16,9 +16,14 @@ try:
 except ImportError:
     pass
 
+class AgentState(MessagesState):
+    """Custom LangGraph state incorporating message history and query retry counts."""
+    retries: int
+
 class EHRQueryAgent:
     """An agent that translates natural language queries to SQL, executes them 
-    against an SQLite database, and returns the query results using a LangGraph workflow.
+    against a database, handles errors with a self-healing retry loop, and 
+    summarizes the output into a plain English conversational response.
     """
 
     def __init__(self, db_uri: str = None) -> None:
@@ -85,25 +90,41 @@ class EHRQueryAgent:
             temperature=0
         )
 
-    def list_tables_node(self, state: MessagesState) -> Dict[str, List[AIMessage]]:
+    def list_tables_node(self, state: AgentState) -> Dict[str, List[AIMessage]]:
         """Node 1: Fetch the available catalog tables."""
         print("\n[Node 1] Fetching catalog tables...")
         result = self.list_tables_tool.invoke("")
         return {"messages": [AIMessage(content=result)]}
 
-    def get_schema_node(self, state: MessagesState) -> Dict[str, List[AIMessage]]:
+    def get_schema_node(self, state: AgentState) -> Dict[str, List[AIMessage]]:
         """Node 2: Read specifications/schemas for the tables."""
         print("\n[Node 2] Reading schema specifications...")
         table_names = state["messages"][-1].content
         result = self.get_schema_tool.invoke(table_names)
         return {"messages": [AIMessage(content=result)]}
 
-    def generate_query_node(self, state: MessagesState) -> Dict[str, List[Any]]:
-        """Node 3: Generate SQL query based on user question and DB schema."""
+    def generate_query_node(self, state: AgentState) -> Dict[str, List[Any]]:
+        """Node 3: Generate SQL query based on user question and DB schema, taking error details on retry."""
         print("\n[Node 3] Building execution query context...")
         user_question = state["messages"][0].content
-        db_schema = state["messages"][-1].content
         
+        # Locate schema description in message history
+        db_schema = ""
+        for msg in reversed(state["messages"]):
+            if isinstance(msg, AIMessage) and "CREATE TABLE" in msg.content:
+                db_schema = msg.content
+                break
+        if not db_schema:
+            db_schema = state["messages"][2].content if len(state["messages"]) > 2 else ""
+
+        # Identify previous execution errors for self-healing prompt injections
+        retries = state.get("retries", 0)
+        previous_error = ""
+        if retries > 0:
+            last_msg = state["messages"][-1].content
+            if last_msg.startswith("Error executing query:"):
+                previous_error = last_msg
+
         prompt = f"""You are an SQL database query expert. Generate the correct query matching the schema below.
         
         User Query Request: {user_question}
@@ -114,80 +135,180 @@ class EHRQueryAgent:
         Rules:
         - Use ONLY safe SELECT operations. Do not update, alter, append, or drop tables.
         - Return ONLY the clean, raw SQL string payload. Do not wrap it in markdown framing like ```sql."""
+
+        if previous_error:
+            prompt += f"""
+
+            WARNING: The SQL query you previously generated failed with the following execution error:
+            {previous_error}
+
+            Analyze the error and the schema closely. Generate a corrected SQL query using only valid, existing column names and SQL syntax. Avoid repeating the same mistake."""
         
         result = self.llm.invoke(prompt)
         print(f"-> Active Model Prompt Output: {result.content}")
         return {"messages": [result]}
 
-    def execute_query_node(self, state: MessagesState) -> Dict[str, List[AIMessage]]:
-        """Node 4: Execute SQL query on the database, with exception handling."""
+    def execute_query_node(self, state: AgentState) -> Dict[str, Any]:
+        """Node 4: Execute SQL query on the database, with exception tracking for retry router."""
         print("\n[Node 4] Injecting context payload into DB engine...")
         sql_query = str(state["messages"][-1].content).strip()
+        
+        # Safe extraction if state messages are out of order
+        if sql_query.startswith("Error executing query:"):
+            for msg in reversed(state["messages"]):
+                content = str(msg.content).strip()
+                if not content.startswith("Error executing query:") and "SELECT" in content.upper():
+                    sql_query = content
+                    break
+        
         try:
             result = self.run_query_tool.invoke(sql_query)
+            return {"messages": [AIMessage(content=result)]}
         except Exception as e:
             result = f"Error executing query: {str(e)}"
             print(f"-> Query Execution Failed: {result}")
-        return {"messages": [AIMessage(content=result)]}
+            current_retries = state.get("retries", 0)
+            return {
+                "messages": [AIMessage(content=result)],
+                "retries": current_retries + 1
+            }
+
+    def should_retry(self, state: AgentState) -> str:
+        """Conditional edge router checking retry limit on query execution errors."""
+        last_msg = state["messages"][-1].content
+        retries = state.get("retries", 0)
+        
+        if last_msg.startswith("Error executing query:") and retries < 2:
+            print(f"\n[Router] Query failed. Retry count: {retries}/2. Routing back to generate_query...")
+            return "generate_query"
+            
+        print("\n[Router] Query succeeded or retry limit reached. Routing to summarize_results...")
+        return "summarize_results"
+
+    def summarize_results_node(self, state: AgentState) -> Dict[str, List[AIMessage]]:
+        """Node 5: Generates a natural language clinical summary of database results."""
+        print("\n[Node 5] Generating conversational results summary...")
+        user_question = state["messages"][0].content
+        
+        # Traverse history to identify query outputs and query string
+        db_result = ""
+        for msg in reversed(state["messages"]):
+            content = msg.content
+            if content.startswith("Error executing query:"):
+                db_result = content
+                break
+            elif not db_result:
+                db_result = content
+                break
+
+        if db_result.startswith("Error executing query:"):
+            prompt = f"""Write a brief, polite response explaining that we couldn't resolve the database query due to an execution error.
+            
+            Original Question: {user_question}
+            Error Details: {db_result}"""
+        else:
+            prompt = f"""You are a clinical data summarizer. Write a clean, brief natural language response answering the user's clinical question based directly on the database query results. Keep it simple and direct. Do not explain SQL syntax or mention table names.
+            
+            User Question: {user_question}
+            Database Result: {db_result}"""
+            
+        result = self.llm.invoke(prompt)
+        print(f"-> Conversational Summary: {result.content}")
+        return {"messages": [result]}
 
     def _compile_graph(self) -> Any:
         """Sets up the state graph nodes, edges, and compiles it."""
-        builder = StateGraph(MessagesState)
+        builder = StateGraph(AgentState)
         
         # Register nodes
         builder.add_node("list_tables", self.list_tables_node)
         builder.add_node("get_schema", self.get_schema_node)
         builder.add_node("generate_query", self.generate_query_node)
         builder.add_node("execute_query", self.execute_query_node)
+        builder.add_node("summarize_results", self.summarize_results_node)
         
         # Configure transitions
         builder.add_edge(START, "list_tables")
         builder.add_edge("list_tables", "get_schema")
         builder.add_edge("get_schema", "generate_query")
         builder.add_edge("generate_query", "execute_query")
-        builder.add_edge("execute_query", END)
+        
+        # Set up retry conditional logic on execute query
+        builder.add_conditional_edges(
+            "execute_query",
+            self.should_retry,
+            {
+                "generate_query": "generate_query",
+                "summarize_results": "summarize_results"
+            }
+        )
+        builder.add_edge("summarize_results", END)
         
         return builder.compile()
 
     def query(self, question: str) -> str:
         """Runs the compiled graph workflow for a natural language question."""
-        initial_state = {"messages": [HumanMessage(content=question)]}
+        initial_state = {
+            "messages": [HumanMessage(content=question)],
+            "retries": 0
+        }
         output = self.agent.invoke(initial_state)
         return output["messages"][-1].content
 
     def query_detailed(self, question: str) -> dict:
-        """Runs the compiled graph workflow and returns generated SQL, DB results, and LLM token usage."""
-        initial_state = {"messages": [HumanMessage(content=question)]}
+        """Runs the compiled graph workflow and returns generated SQL, DB results, conversational summary, and LLM token usage."""
+        initial_state = {
+            "messages": [HumanMessage(content=question)],
+            "retries": 0
+        }
         output = self.agent.invoke(initial_state)
         
         sql_query = ""
         db_result = ""
+        conversational_summary = ""
         token_usage = None
         
-        # The generate_query node is the second-to-last message in MessagesState
-        if len(output["messages"]) >= 2:
-            ai_message = output["messages"][-2]
-            if isinstance(ai_message, AIMessage):
-                sql_query = ai_message.content
-                # Safely extract token counts from response metadata
-                if hasattr(ai_message, "usage_metadata") and ai_message.usage_metadata:
-                    token_usage = {
-                        "input": ai_message.usage_metadata.get("input_tokens"),
-                        "output": ai_message.usage_metadata.get("output_tokens"),
-                        "total": ai_message.usage_metadata.get("total_tokens")
-                    }
-                elif "token_usage" in ai_message.response_metadata:
-                    token_usage = {
-                        "input": ai_message.response_metadata["token_usage"].get("prompt_tokens"),
-                        "output": ai_message.response_metadata["token_usage"].get("completion_tokens"),
-                        "total": ai_message.response_metadata["token_usage"].get("total_tokens")
-                    }
-        
         if len(output["messages"]) >= 1:
-            db_result = output["messages"][-1].content
+            conversational_summary = output["messages"][-1].content
+            
+        # Traverse messages backwards to separate SQL statement and DB execution outputs
+        for msg in reversed(output["messages"][:-1]):
+            content = msg.content
+            if "SELECT" in content.upper() and not sql_query:
+                sql_query = content
+            elif not db_result:
+                db_result = content
+                
+        # Aggregate token usage across all steps
+        input_tokens = 0
+        output_tokens = 0
+        total_tokens = 0
+        has_usage = False
+        
+        for msg in output["messages"]:
+            if isinstance(msg, AIMessage):
+                if hasattr(msg, "usage_metadata") and msg.usage_metadata:
+                    input_tokens += msg.usage_metadata.get("input_tokens", 0)
+                    output_tokens += msg.usage_metadata.get("output_tokens", 0)
+                    total_tokens += msg.usage_metadata.get("total_tokens", 0)
+                    has_usage = True
+                elif "token_usage" in msg.response_metadata:
+                    t_use = msg.response_metadata["token_usage"]
+                    input_tokens += t_use.get("prompt_tokens", 0)
+                    output_tokens += t_use.get("completion_tokens", 0)
+                    total_tokens += t_use.get("total_tokens", 0)
+                    has_usage = True
+                    
+        if has_usage:
+            token_usage = {
+                "input": input_tokens,
+                "output": output_tokens,
+                "total": total_tokens
+            }
             
         return {
             "query": sql_query,
             "result": db_result,
+            "summary": conversational_summary,
             "tokens": token_usage
         }
