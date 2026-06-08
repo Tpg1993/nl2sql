@@ -2,6 +2,10 @@
 
 An agentic AI application that translates plain English questions into SQL queries, executes them against an Electronic Health Records (EHR) database, and renders the results dynamically. Powered by **LangGraph**, **LangChain**, **FastAPI**, and **Sarvam AI / OpenAI**.
 
+> [!NOTE]
+> For a detailed log of feature focus, database engines, and configurations across the development branches (v1, v2, and v3), please refer to [versions.md](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md).
+
+
 ## Features
 
 *   **Agentic LangGraph Pipeline**: A 4-stage sequential state graph (`list_tables` -> `get_schema` -> `generate_query` -> `execute_query`) with built-in query syntax error handling.
@@ -95,6 +99,7 @@ NL2SQL/
 │   └── app.js               # Frontend fetch and DOM rendering logic
 ├── .gitignore               # Ignored cache, databases, and secrets
 ├── README.md                # Project documentation
+├── versions.md              # Dynamic version and branch descriptions
 └── requirements.txt         # Root requirements pointing to backend
 ```
 
@@ -111,10 +116,7 @@ NL2SQL/
 git clone https://github.com/Tpg1993/nl2sql.git
 cd nl2sql
 
-# Version branches:
-# - v1_sarvam_local_sql       (SQLite Database Setup)
-# - v2_sarvam_databricks_sql   (Databricks Connection Support)
-# - v3_sarvam_redis_cache     (Redis Caching & SQLite Fallback Support)
+# Check versions.md for branch options. Checkout the latest version:
 git checkout v3_sarvam_redis_cache
 ```
 

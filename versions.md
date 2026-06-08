@@ -1,0 +1,29 @@
+# Version History & Releases
+
+This document tracks the feature additions, database routing, model integrations, and caching changes across different development branches.
+
+---
+
+## [v3_sarvam_redis_cache](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md#v3_sarvam_redis_cache) (Current Branch)
+*   **Release Focus**: Production-ready hybrid query caching.
+*   **Database Engine**: Works on both local SQLite and remote Databricks SQL Warehouse.
+*   **Caching Layer**:
+    *   Dynamic checking for `REDIS_URL` in the environment.
+    *   If active, boots distributed **Redis** caching to speed up recurring queries and save execution costs.
+    *   Cascades automatically back to a local programmatically-evicted **SQLite** cache if Redis is unconfigured or offline.
+*   **Dependencies**: Added `redis==5.0.4`.
+
+---
+
+## [v2_sarvam_databricks_sql](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md#v2_sarvam_databricks_sql)
+*   **Release Focus**: Cloud-scale remote database connections.
+*   **Database Engine**: Integrates a dynamic DB Router that boots a remote **Databricks SQL Warehouse** connection if credentials (`DATABRICKS_HOST`, `DATABRICKS_TOKEN`, and `DATABRICKS_HTTP_PATH`) are present in `.env`.
+*   **Fallback**: Dynamically falls back to local SQLite database ([backend/ehr_data.db](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/backend/ehr_data.db)) if credentials are left blank.
+*   **Dependencies**: Added `databricks-sqlalchemy==2.0.9`.
+
+---
+
+## [v1_sarvam_local_sql](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md#v1_sarvam_local_sql)
+*   **Release Focus**: Baseline EHR Agentic NL2SQL implementation.
+*   **Database Engine**: Single-node SQLite database ([backend/ehr_data.db](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/backend/ehr_data.db)).
+*   **Model Router**: Implements the core LangGraph sequential pipeline (`list_tables` -> `get_schema` -> `generate_query` -> `execute_query`). Primary generation runs on Sarvam AI (`sarvam-105b`) when `SARVAM_API_KEY` is present, with backup fallback to OpenAI (`gpt-4o-mini`).
