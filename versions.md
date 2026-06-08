@@ -9,6 +9,8 @@ This document tracks the feature additions, database routing, model integrations
 *   **Self-Healing Loop**: Tracks query failures using a custom `AgentState` retry counter. If SQL execution fails, the agent routes back to the LLM with error context to heal the syntax automatically.
 *   **Conversational Summaries**: Adds a `summarize_results` node to synthesize raw table outcomes into natural language clinical summaries.
 *   **Performance Tracking**: Computes millisecond database latencies, showing real-time latencies on-screen.
+*   **Stage Latency Breakdown**: Displays detailed segment-level latency metrics (cache retrieval, schema reflection, SQL generation, database query execution, and conversational summarization) within a collapsible statistics panel.
+*   **Hover Info Tooltips**: Uses high-performance pure-CSS hover tooltips next to main and stage latencies, showing contextual explanations on hover using FontAwesome info icons.
 *   **Interactive Sidebar**: Clicking any sidebar table or column appends it directly to the chat input and focuses it.
 *   **SQL Syntax Highlighting**: Custom regex SQL tokenizer dynamically colors keywords, strings, and integers for maximum readability.
 

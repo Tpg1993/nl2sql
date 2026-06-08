@@ -626,7 +626,7 @@ body {
     background-color: rgba(0, 0, 0, 0.2);
     border: 1px solid var(--border-glass);
     border-radius: 8px;
-    overflow: hidden;
+    overflow: visible;
     transition: var(--transition-smooth);
 }
 
@@ -1042,6 +1042,108 @@ body[data-theme="light"] .sql-string {
 body[data-theme="light"] .sql-number {
     color: #D97706; /* Darker amber in light mode */
 }
+
+/* =====================================================================
+   LATENCY BREAKDOWN PANEL & STAGES
+   ===================================================================== */
+.latency-breakdown-panel {
+    border-top: 1px solid var(--border-glass);
+    padding: 12px 14px;
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+body[data-theme="light"] .latency-breakdown-panel {
+    border-color: rgba(15, 23, 42, 0.08);
+}
+
+.latency-breakdown-panel h4 {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+}
+
+.latency-stages-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.latency-stage-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+}
+
+.stage-label {
+    display: flex;
+    align-items: center;
+    color: var(--text-secondary);
+}
+
+.stage-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* =====================================================================
+   INTERACTIVE INFO TOOLTIP STYLING
+   ===================================================================== */
+.info-tooltip {
+    position: relative;
+    display: inline-flex;
+    margin-left: 6px;
+    color: var(--text-muted);
+    cursor: help;
+    font-size: 0.75rem;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-smooth);
+}
+
+.info-tooltip:hover {
+    color: var(--accent-secondary);
+}
+
+.info-tooltip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 130%;
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background-color: #1E293B;
+    color: #F8FAFC;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 400;
+    line-height: 1.4;
+    width: 220px;
+    text-align: center;
+    white-space: normal;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    z-index: 9999;
+}
+
+.info-tooltip:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+body[data-theme="light"] .info-tooltip::after {
+    background-color: #FFFFFF;
+    color: #1E293B;
+    border: 1px solid rgba(15, 23, 42, 0.15);
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+}
+
 
 /* =====================================================================
    ALWAYS-VISIBLE PERFORMANCE METADATA BAR

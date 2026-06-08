@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Any, Dict, List
 from sqlalchemy import create_engine
 from langchain_community.utilities import SQLDatabase
@@ -17,8 +18,9 @@ except ImportError:
     pass
 
 class AgentState(MessagesState):
-    """Custom LangGraph state incorporating message history and query retry counts."""
+    """Custom LangGraph state incorporating message history, retry count, and section latencies."""
     retries: int
+    latencies: Dict[str, float]
 
 class EHRQueryAgent:
     """An agent that translates natural language queries to SQL, executes them 
@@ -90,22 +92,33 @@ class EHRQueryAgent:
             temperature=0
         )
 
-    def list_tables_node(self, state: AgentState) -> Dict[str, List[AIMessage]]:
+    def list_tables_node(self, state: AgentState) -> Dict[str, Any]:
         """Node 1: Fetch the available catalog tables."""
         print("\n[Node 1] Fetching catalog tables...")
+        start_time = time.perf_counter()
         result = self.list_tables_tool.invoke("")
-        return {"messages": [AIMessage(content=result)]}
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        
+        latencies = state.get("latencies", {}).copy()
+        latencies["schema"] = latencies.get("schema", 0.0) + elapsed_ms
+        return {"messages": [AIMessage(content=result)], "latencies": latencies}
 
-    def get_schema_node(self, state: AgentState) -> Dict[str, List[AIMessage]]:
+    def get_schema_node(self, state: AgentState) -> Dict[str, Any]:
         """Node 2: Read specifications/schemas for the tables."""
         print("\n[Node 2] Reading schema specifications...")
+        start_time = time.perf_counter()
         table_names = state["messages"][-1].content
         result = self.get_schema_tool.invoke(table_names)
-        return {"messages": [AIMessage(content=result)]}
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        
+        latencies = state.get("latencies", {}).copy()
+        latencies["schema"] = latencies.get("schema", 0.0) + elapsed_ms
+        return {"messages": [AIMessage(content=result)], "latencies": latencies}
 
-    def generate_query_node(self, state: AgentState) -> Dict[str, List[Any]]:
+    def generate_query_node(self, state: AgentState) -> Dict[str, Any]:
         """Node 3: Generate SQL query based on user question and DB schema, taking error details on retry."""
         print("\n[Node 3] Building execution query context...")
+        start_time = time.perf_counter()
         user_question = state["messages"][0].content
         
         # Locate schema description in message history
@@ -145,12 +158,18 @@ class EHRQueryAgent:
             Analyze the error and the schema closely. Generate a corrected SQL query using only valid, existing column names and SQL syntax. Avoid repeating the same mistake."""
         
         result = self.llm.invoke(prompt)
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        
+        latencies = state.get("latencies", {}).copy()
+        latencies["generation"] = latencies.get("generation", 0.0) + elapsed_ms
+        
         print(f"-> Active Model Prompt Output: {result.content}")
-        return {"messages": [result]}
+        return {"messages": [result], "latencies": latencies}
 
     def execute_query_node(self, state: AgentState) -> Dict[str, Any]:
         """Node 4: Execute SQL query on the database, with exception tracking for retry router."""
         print("\n[Node 4] Injecting context payload into DB engine...")
+        start_time = time.perf_counter()
         sql_query = str(state["messages"][-1].content).strip()
         
         # Safe extraction if state messages are out of order
@@ -163,14 +182,23 @@ class EHRQueryAgent:
         
         try:
             result = self.run_query_tool.invoke(sql_query)
-            return {"messages": [AIMessage(content=result)]}
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            
+            latencies = state.get("latencies", {}).copy()
+            latencies["execution"] = latencies.get("execution", 0.0) + elapsed_ms
+            return {"messages": [AIMessage(content=result)], "latencies": latencies}
         except Exception as e:
             result = f"Error executing query: {str(e)}"
             print(f"-> Query Execution Failed: {result}")
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            
+            latencies = state.get("latencies", {}).copy()
+            latencies["execution"] = latencies.get("execution", 0.0) + elapsed_ms
             current_retries = state.get("retries", 0)
             return {
                 "messages": [AIMessage(content=result)],
-                "retries": current_retries + 1
+                "retries": current_retries + 1,
+                "latencies": latencies
             }
 
     def should_retry(self, state: AgentState) -> str:
@@ -185,9 +213,10 @@ class EHRQueryAgent:
         print("\n[Router] Query succeeded or retry limit reached. Routing to summarize_results...")
         return "summarize_results"
 
-    def summarize_results_node(self, state: AgentState) -> Dict[str, List[AIMessage]]:
+    def summarize_results_node(self, state: AgentState) -> Dict[str, Any]:
         """Node 5: Generates a natural language clinical summary of database results."""
         print("\n[Node 5] Generating conversational results summary...")
+        start_time = time.perf_counter()
         user_question = state["messages"][0].content
         
         # Traverse history to identify query outputs and query string
@@ -213,8 +242,13 @@ class EHRQueryAgent:
             Database Result: {db_result}"""
             
         result = self.llm.invoke(prompt)
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        
+        latencies = state.get("latencies", {}).copy()
+        latencies["summarization"] = latencies.get("summarization", 0.0) + elapsed_ms
+        
         print(f"-> Conversational Summary: {result.content}")
-        return {"messages": [result]}
+        return {"messages": [result], "latencies": latencies}
 
     def _compile_graph(self) -> Any:
         """Sets up the state graph nodes, edges, and compiles it."""
@@ -250,7 +284,13 @@ class EHRQueryAgent:
         """Runs the compiled graph workflow for a natural language question."""
         initial_state = {
             "messages": [HumanMessage(content=question)],
-            "retries": 0
+            "retries": 0,
+            "latencies": {
+                "schema": 0.0,
+                "generation": 0.0,
+                "execution": 0.0,
+                "summarization": 0.0
+            }
         }
         output = self.agent.invoke(initial_state)
         return output["messages"][-1].content
@@ -259,7 +299,13 @@ class EHRQueryAgent:
         """Runs the compiled graph workflow and returns generated SQL, DB results, conversational summary, and LLM token usage."""
         initial_state = {
             "messages": [HumanMessage(content=question)],
-            "retries": 0
+            "retries": 0,
+            "latencies": {
+                "schema": 0.0,
+                "generation": 0.0,
+                "execution": 0.0,
+                "summarization": 0.0
+            }
         }
         output = self.agent.invoke(initial_state)
         
@@ -306,9 +352,18 @@ class EHRQueryAgent:
                 "total": total_tokens
             }
             
+        # Extract segment latency stats
+        latency_breakdown = output.get("latencies", {
+            "schema": 0.0,
+            "generation": 0.0,
+            "execution": 0.0,
+            "summarization": 0.0
+        })
+            
         return {
             "query": sql_query,
             "result": db_result,
             "summary": conversational_summary,
-            "tokens": token_usage
+            "tokens": token_usage,
+            "latency_breakdown": latency_breakdown
         }

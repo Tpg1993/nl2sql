@@ -90,6 +90,13 @@ def run_query(request: QueryRequest):
                 "success": True,
                 "cached": True,
                 "latency_ms": elapsed_ms,
+                "latency_breakdown": {
+                    "cache": elapsed_ms,
+                    "schema": 0.0,
+                    "generation": 0.0,
+                    "execution": 0.0,
+                    "summarization": 0.0
+                },
                 "error": None
             }
 
@@ -134,6 +141,7 @@ def run_query(request: QueryRequest):
             "success": success,
             "cached": False,
             "latency_ms": elapsed_ms,
+            "latency_breakdown": res.get("latency_breakdown", {}),
             "error": error_message
         }
     except Exception as e:
@@ -141,5 +149,12 @@ def run_query(request: QueryRequest):
         return {
             "error": str(e),
             "success": False,
-            "latency_ms": elapsed_ms
+            "latency_ms": elapsed_ms,
+            "latency_breakdown": {
+                "cache": 0.0,
+                "schema": 0.0,
+                "generation": 0.0,
+                "execution": 0.0,
+                "summarization": 0.0
+            }
         }

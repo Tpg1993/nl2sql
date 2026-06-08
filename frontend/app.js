@@ -183,7 +183,7 @@ async function submitQuestion(question) {
         
         const data = await response.json();
         if (data.success) {
-            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms);
+            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown);
         } else {
             appendAssistantError(data.error || "An error occurred during query generation.");
         }
@@ -336,7 +336,7 @@ function highlightSQL(sql) {
 }
 
 // Append Assistant Success Response bubble (SQL, Table, and Tokens)
-function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null) {
+function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null) {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
@@ -416,7 +416,13 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                 
                 <!-- Performance Metadata (Always Visible) -->
                 <div class="query-meta-bar">
-                    <span class="meta-item"><i class="fa-regular fa-clock"></i> Latency: <strong>${latencyMs !== null ? latencyMs + ' ms' : 'N/A'}</strong></span>
+                    <span class="meta-item">
+                        <i class="fa-regular fa-clock"></i> 
+                        Latency: <strong>${latencyMs !== null ? latencyMs + ' ms' : 'N/A'}</strong>
+                        <span class="info-tooltip" data-tooltip="Total round-trip latency. On cache miss, this includes schema reflection, LLM query generation, database execution, and result summarization. On cache hit, this measures fast cache retrieval.">
+                            <i class="fa-solid fa-circle-info"></i>
+                        </span>
+                    </span>
                     ${cached ? `<span class="meta-item cache-badge"><i class="fa-solid fa-cloud-bolt"></i> Served from Cache</span>` : ''}
                 </div>
                 
@@ -450,8 +456,55 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                         
                         <div class="latency-info-row">
                             <i class="fa-regular fa-clock"></i>
-                            <span>Execution Latency: <strong>${latencyMs !== null ? latencyMs + ' ms' : 'N/A'}</strong></span>
+                            <span>
+                                Execution Latency: <strong>${latencyMs !== null ? latencyMs + ' ms' : 'N/A'}</strong>
+                                <span class="info-tooltip" data-tooltip="Total round-trip latency. On cache miss, this includes schema reflection, LLM query generation, database execution, and result summarization. On cache hit, this measures fast cache retrieval.">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                </span>
+                            </span>
                         </div>
+
+                        ${latencyBreakdown ? `
+                        <div class="latency-breakdown-panel">
+                            <h4>Stage Latency Breakdown</h4>
+                            <div class="latency-stages-grid">
+                                ${Object.entries(latencyBreakdown).map(([stage, ms]) => {
+                                    if (ms === 0 && stage === 'cache') return '';
+                                    if (ms === 0 && cached) return ''; // Hide db/llm breakdown on cache hit
+                                    
+                                    const labels = {
+                                        cache: "Cache Retrieval",
+                                        schema: "Schema Reflection",
+                                        generation: "SQL Translation (LLM)",
+                                        execution: "DB Query Execution",
+                                        summarization: "Result Summarization"
+                                    };
+                                    const tooltips = {
+                                        cache: "Time spent retrieving serialized responses from Redis or SQLite cache.",
+                                        schema: "Time spent reflecting database tables and column schemas.",
+                                        generation: "Time spent by LLM generating clean SQL queries from clinical inputs.",
+                                        execution: "Time spent executing the generated query against SQLite/Databricks database engines.",
+                                        summarization: "Time spent by LLM parsing query outcomes into a conversational narrative."
+                                    };
+                                    
+                                    const label = labels[stage] || stage;
+                                    const tooltip = tooltips[stage] || "";
+                                    
+                                    return `
+                                    <div class="latency-stage-item">
+                                        <span class="stage-label">
+                                            ${label}
+                                            <span class="info-tooltip" data-tooltip="${tooltip}">
+                                                <i class="fa-solid fa-circle-info"></i>
+                                            </span>
+                                        </span>
+                                        <span class="stage-value">${ms} ms</span>
+                                    </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
 
                         ${cached ? `
                         <div class="cache-saving-banner">
