@@ -12,6 +12,68 @@ An agentic AI application that translates plain English questions into SQL queri
     *   The generated SQL statements with a one-click copy button.
     *   Dynamic, responsive HTML tables generated from SQL query outputs.
 
+
+## Architecture Diagram
+
+```mermaid
+graph TD
+    %% Styling
+    classDef frontend fill:#7B2CBF,stroke:#FFF,stroke-width:1.5px,color:#FFF;
+    classDef backend fill:#1A1F3A,stroke:#7B2CBF,stroke-width:1.5px,color:#FFF;
+    classDef database fill:#05070F,stroke:#9D4EDD,stroke-width:1.5px,color:#FFF;
+    classDef external fill:#0B0C10,stroke:#64748B,stroke-width:1.5px,color:#FFF;
+    
+    %% Components
+    subgraph Frontend [Web Browser]
+        UI["Chat Dashboard UI (HTML/CSS/JS)"]
+    end
+    
+    subgraph Backend [FastAPI Server]
+        API["FastAPI app.py"]
+        Agent["LangGraph Agent agent.py"]
+        
+        subgraph Graph ["LangGraph Workflow (MessagesState)"]
+            N1["list_tables"]
+            N2["get_schema"]
+            N3["generate_query"]
+            N4["execute_query"]
+            
+            N1 --> N2
+            N2 --> N3
+            N3 --> N4
+        end
+    end
+    
+    subgraph Storage [Local Database]
+        DB[("SQLite ehr_data.db")]
+    end
+    
+    subgraph LLM [AI Router]
+        Model["Sarvam AI (sarvam-105b)<br>or OpenAI (gpt-4o-mini)"]
+    end
+
+    %% Connections
+    UI -->|1. POST /api/query| API
+    API -->|2. agent.query_detailed| Agent
+    Agent -->|3. Compile & Invoke| Graph
+    
+    N1 -->|Query catalog| DB
+    N2 -->|Fetch schemas| DB
+    N3 -->|Send Prompt| Model
+    Model -->|Return SQL Query| N3
+    N4 -->|Run SQL| DB
+    DB -->|Return Rows| N4
+    
+    Graph -->|4. Query & Result| Agent
+    Agent -->|5. Return Dict| API
+    API -->|6. JSON Response| UI
+    
+    class UI frontend;
+    class API,Agent,N1,N2,N3,N4 backend;
+    class DB database;
+    class Model external;
+```
+
 ---
 
 ## Project Structure
