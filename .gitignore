@@ -1,0 +1,26 @@
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment configurations containing API keys (Security)
+.env
+backend/.env
+
+# Local database file
+backend/ehr_data.db
+*.db
+
+# Temporary test/debug files
+verify_api.py
+test_sarvam.py
+test_query_2.py
+scratch/
+verify_api.py
+**/scratch/

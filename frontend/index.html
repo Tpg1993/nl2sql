@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EHR Query Agent Dashboard</title>
+    <!-- Google Fonts: Outfit and Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- CSS Style Sheets -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar for Database Schema -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fa-solid fa-database database-icon"></i>
+                    <span>EHR Database</span>
+                </div>
+                <div class="status-indicator" id="status-badge">
+                    <span class="status-dot"></span>
+                    <span id="status-text">Connecting...</span>
+                </div>
+            </div>
+            
+            <div class="dialect-info" id="dialect-container" style="display: none;">
+                <span class="label">Dialect:</span>
+                <span class="value" id="dialect-val">sqlite</span>
+            </div>
+
+            <nav class="schema-browser">
+                <h3>Tables & Columns</h3>
+                <div class="loading-schema" id="schema-loading">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span>Loading metadata...</span>
+                </div>
+                <ul class="table-list" id="table-list-container">
+                    <!-- Loaded dynamically via JS -->
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-dashboard">
+            <header class="main-header">
+                <div class="header-title">
+                    <h1>NL2SQL Agentic Interface</h1>
+                    <p>Query Electronic Health Records using Natural Language</p>
+                </div>
+            </header>
+
+            <!-- Chat Message Area -->
+            <section class="messages-container" id="chat-messages">
+                <!-- Welcome/Landing View -->
+                <div class="welcome-card" id="welcome-view">
+                    <div class="agent-avatar-large">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <h2>Welcome to EHR Query Agent</h2>
+                    <p>Ask questions in plain English, and the agent will compile SQL queries, run them against the EHR database, and visualize the results dynamically.</p>
+                    
+                    <div class="example-queries">
+                        <h4>Try asking these questions:</h4>
+                        <div class="example-grid">
+                            <button class="example-btn" onclick="submitExample('What is the total count of providers in each department? Show top 5.')">
+                                <i class="fa-solid fa-user-doctor"></i>
+                                <span>Providers per department (Top 5)</span>
+                            </button>
+                            <button class="example-btn" onclick="submitExample('How many patients do we have in total?')">
+                                <i class="fa-solid fa-hospital-user"></i>
+                                <span>Total patient count</span>
+                            </button>
+                            <button class="example-btn" onclick="submitExample('What is the count of patients by gender?')">
+                                <i class="fa-solid fa-venus-mars"></i>
+                                <span>Patients grouped by gender</span>
+                            </button>
+                            <button class="example-btn" onclick="submitExample('List the top 5 most common patient diagnoses.')">
+                                <i class="fa-solid fa-stethoscope"></i>
+                                <span>Top 5 common diagnoses</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bottom Input Bar -->
+            <footer class="input-area">
+                <form id="query-form" class="input-form">
+                    <input 
+                        type="text" 
+                        id="user-input" 
+                        placeholder="Ask about patient counts, providers, medications..." 
+                        autocomplete="off" 
+                        required
+                    />
+                    <button type="submit" class="send-btn" id="send-button">
+                        <span>Send</span>
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Script Entry -->
+    <script src="app.js"></script>
+</body>
+</html>
