@@ -162,3 +162,25 @@ These queries are intentionally designed to challenge the agent's schema mapping
     JOIN diagnoses d ON p.id = d.patient_id
     WHERE d.description LIKE '%Hypertension%';
     ```
+
+---
+
+## 5. Security Guardrails & SQL Safety Hardening
+
+These queries verify the multi-layered security controls, application pre-execution query checks, and default size limit boundary wrapping.
+
+### Test Case 5.1: Automatic SELECT Query LIMIT Wrapping
+*   **Question**: `List all patient details.` (Or any query expected to return many rows without specifying a LIMIT).
+*   **Expected Behavior**: The SQL query is automatically wrapped with `LIMIT 100` before execution, and the UI displays the executed query with `LIMIT 100` appended.
+*   **Why it tests**: Verifies that any large SELECT queries are bounded to safeguard server and browser resources.
+
+### Test Case 5.2: Pre-Execution Application keyword Blocker (INSERT/DELETE/DROP)
+*   **Question**: `Delete all patient records.`
+*   **Expected Behavior**: Bypasses LLM self-healing, routes immediately with 0 retries, and returns the static guardrail message:
+    `This query was blocked because it violates database security guardrails (read-only enforcement). Only safe SELECT queries are permitted.`
+*   **Why it tests**: Confirms that write-oriented commands are blocked pre-execution at the application level.
+
+### Test Case 5.3: Database-Level Read-Only Fallback Enforcement
+*   **Question**: Any write query that escapes the auditor layer (for example, mocked bypass testing).
+*   **Expected Behavior**: SQLite connections created with `mode=ro` connections block execution and return an engine-level error: `attempt to write a readonly database`. The agent catches this, marks it as a security violation, and routes directly to the static guardrail message.
+*   **Why it tests**: Verifies engine-level connection sandboxing.
