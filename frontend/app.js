@@ -414,6 +414,12 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                     ${tableHtml}
                 </div>
                 
+                <!-- Performance Metadata (Always Visible) -->
+                <div class="query-meta-bar">
+                    <span class="meta-item"><i class="fa-regular fa-clock"></i> Latency: <strong>${latencyMs !== null ? latencyMs + ' ms' : 'N/A'}</strong></span>
+                    ${cached ? `<span class="meta-item cache-badge"><i class="fa-solid fa-cloud-bolt"></i> Served from Cache</span>` : ''}
+                </div>
+                
                 <!-- Token Usage & Latency Details -->
                 ${tokens ? `
                 <div class="token-details-container ${cached ? 'cached-hit' : ''}">

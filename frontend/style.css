@@ -1043,3 +1043,46 @@ body[data-theme="light"] .sql-number {
     color: #D97706; /* Darker amber in light mode */
 }
 
+/* =====================================================================
+   ALWAYS-VISIBLE PERFORMANCE METADATA BAR
+   ===================================================================== */
+.query-meta-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 14px;
+    margin-bottom: 2px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.meta-item i {
+    color: var(--accent-secondary);
+}
+
+.meta-item.cache-badge {
+    background-color: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: var(--success);
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.meta-item.cache-badge i {
+    color: var(--success);
+}
+
+body[data-theme="light"] .meta-item.cache-badge {
+    background-color: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+
