@@ -156,7 +156,7 @@ async function submitQuestion(question) {
         
         const data = await response.json();
         if (data.success) {
-            appendAssistantResponse(data.query, data.result);
+            appendAssistantResponse(data.query, data.result, data.tokens);
         } else {
             appendAssistantError(data.error || "An error occurred during query generation.");
         }
@@ -259,8 +259,8 @@ function extractHeaders(sql) {
     });
 }
 
-// Append Assistant Success Response bubble (SQL & Table)
-function appendAssistantResponse(sqlQuery, queryResult) {
+// Append Assistant Success Response bubble (SQL, Table, and Tokens)
+function appendAssistantResponse(sqlQuery, queryResult, tokens) {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
@@ -336,6 +336,32 @@ function appendAssistantResponse(sqlQuery, queryResult) {
                 <div class="result-table-wrapper">
                     ${tableHtml}
                 </div>
+                
+                <!-- Token Usage (Collapsible) -->
+                ${tokens ? `
+                <div class="token-details-container">
+                    <details class="token-details">
+                        <summary>
+                            <span class="summary-title"><i class="fa-solid fa-bolt"></i> Token Usage Details</span>
+                            <i class="fa-solid fa-chevron-down summary-arrow"></i>
+                        </summary>
+                        <div class="token-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Input Tokens</span>
+                                <span class="stat-value">${tokens.input || '0'}</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Output Tokens</span>
+                                <span class="stat-value">${tokens.output || '0'}</span>
+                            </div>
+                            <div class="stat-item total">
+                                <span class="stat-label">Total Tokens</span>
+                                <span class="stat-value">${tokens.total || '0'}</span>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+                ` : ''}
             </div>
             <span class="msg-time">${time}</span>
         </div>

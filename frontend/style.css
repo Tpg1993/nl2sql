@@ -586,6 +586,101 @@ body {
     color: var(--error);
     margin-top: 2px;
 }
+/* =====================================================================
+   TOKEN DETAILS DROPDOWN
+   ===================================================================== */
+.token-details-container {
+    margin-top: 16px;
+    border-top: 1px dashed var(--border-glass);
+    padding-top: 12px;
+}
+
+.token-details {
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-glass);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: var(--transition-smooth);
+}
+
+.token-details summary {
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    list-style: none; /* Hide default arrow */
+}
+
+.token-details summary::-webkit-details-marker {
+    display: none; /* Hide default arrow in safari */
+}
+
+.token-details summary:hover {
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.token-details summary .summary-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.token-details summary .summary-title i {
+    color: var(--accent-secondary);
+}
+
+.token-details summary .summary-arrow {
+    font-size: 0.7rem;
+    transition: transform 0.2s ease;
+    color: var(--text-muted);
+}
+
+.token-details[open] summary .summary-arrow {
+    transform: rotate(180deg);
+}
+
+.token-stats {
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    border-top: 1px solid var(--border-glass);
+    background-color: rgba(0, 0, 0, 0.1);
+    animation: slideDownCollapse 0.2s ease-out;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stat-label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.stat-item.total .stat-value {
+    color: var(--accent-secondary);
+}
+
+@keyframes slideDownCollapse {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
 /* =====================================================================
    TYPING LOADER STYLING

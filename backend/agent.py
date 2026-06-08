@@ -145,19 +145,38 @@ class EHRQueryAgent:
         return output["messages"][-1].content
 
     def query_detailed(self, question: str) -> dict:
-        """Runs the compiled graph workflow and returns both generated SQL and DB results."""
+        """Runs the compiled graph workflow and returns generated SQL, DB results, and LLM token usage."""
         initial_state = {"messages": [HumanMessage(content=question)]}
         output = self.agent.invoke(initial_state)
         
-        # The last message is the DB output, the second-to-last is the SQL query
         sql_query = ""
         db_result = ""
+        token_usage = None
+        
+        # The generate_query node is the second-to-last message in MessagesState
         if len(output["messages"]) >= 2:
-            sql_query = output["messages"][-2].content
+            ai_message = output["messages"][-2]
+            if isinstance(ai_message, AIMessage):
+                sql_query = ai_message.content
+                # Safely extract token counts from response metadata
+                if hasattr(ai_message, "usage_metadata") and ai_message.usage_metadata:
+                    token_usage = {
+                        "input": ai_message.usage_metadata.get("input_tokens"),
+                        "output": ai_message.usage_metadata.get("output_tokens"),
+                        "total": ai_message.usage_metadata.get("total_tokens")
+                    }
+                elif "token_usage" in ai_message.response_metadata:
+                    token_usage = {
+                        "input": ai_message.response_metadata["token_usage"].get("prompt_tokens"),
+                        "output": ai_message.response_metadata["token_usage"].get("completion_tokens"),
+                        "total": ai_message.response_metadata["token_usage"].get("total_tokens")
+                    }
+        
         if len(output["messages"]) >= 1:
             db_result = output["messages"][-1].content
             
         return {
             "query": sql_query,
-            "result": db_result
+            "result": db_result,
+            "tokens": token_usage
         }

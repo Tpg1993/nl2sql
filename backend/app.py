@@ -90,6 +90,7 @@ def run_query(request: QueryRequest):
         return {
             "query": res["query"],
             "result": parsed_data,
+            "tokens": res["tokens"],
             "success": success,
             "error": error_message
         }
