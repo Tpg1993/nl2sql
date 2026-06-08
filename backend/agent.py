@@ -1,5 +1,7 @@
 import os
 import time
+import re
+import sqlite3
 from typing import Any, Dict, List
 from sqlalchemy import create_engine
 from langchain_community.utilities import SQLDatabase
@@ -47,7 +49,17 @@ class EHRQueryAgent:
                 db_uri = f"sqlite:///{db_path}"
 
         # Initialize connection and db utility
-        self.engine = create_engine(db_uri)
+        if db_uri.startswith("sqlite://"):
+            if db_uri.startswith("sqlite:///"):
+                db_path = db_uri[10:]
+            else:
+                db_path = db_uri[9:]
+            db_path = os.path.abspath(db_path)
+            creator = lambda: sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            self.engine = create_engine("sqlite://", creator=creator)
+        else:
+            self.engine = create_engine(db_uri)
+            
         self.db = SQLDatabase(self.engine, sample_rows_in_table_info=3)
         
         print(f"Database Dialect: {self.db.dialect}")
@@ -166,6 +178,25 @@ class EHRQueryAgent:
         print(f"-> Active Model Prompt Output: {result.content}")
         return {"messages": [result], "latencies": latencies}
 
+    @staticmethod
+    def strip_sql_literals(sql: str) -> str:
+        """Removes single and double quoted string literals from SQL query to avoid false positives on keywords."""
+        sql_no_singles = re.sub(r"'[^']*(?:''[^']*)*'", " ", sql)
+        sql_no_doubles = re.sub(r'"[^"]*(?:""[^"]*)*"', " ", sql_no_singles)
+        return sql_no_doubles
+
+    def audit_sql_query(self, sql_query: str) -> None:
+        """Audits the generated SQL query for dangerous write/schema alteration operations."""
+        DANGEROUS_KEYWORDS = [
+            "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", 
+            "REPLACE", "TRUNCATE", "GRANT", "REVOKE", "PRAGMA"
+        ]
+        cleaned_sql = self.strip_sql_literals(sql_query)
+        for kw in DANGEROUS_KEYWORDS:
+            pattern = r"\b" + kw + r"\b"
+            if re.search(pattern, cleaned_sql, re.IGNORECASE):
+                raise ValueError(f"Security violation: Disallowed SQL command keyword '{kw}' detected outside string literals.")
+
     def execute_query_node(self, state: AgentState) -> Dict[str, Any]:
         """Node 4: Execute SQL query on the database, with exception tracking for retry router."""
         print("\n[Node 4] Injecting context payload into DB engine...")
@@ -173,31 +204,62 @@ class EHRQueryAgent:
         sql_query = str(state["messages"][-1].content).strip()
         
         # Safe extraction if state messages are out of order
+        target_msg = state["messages"][-1]
         if sql_query.startswith("Error executing query:"):
             for msg in reversed(state["messages"]):
                 content = str(msg.content).strip()
                 if not content.startswith("Error executing query:") and "SELECT" in content.upper():
                     sql_query = content
+                    target_msg = msg
                     break
         
         try:
+            # Security Guardrail Check
+            self.audit_sql_query(sql_query)
+
+            # Enforce default LIMIT 100 if no LIMIT is specified in SELECT query
+            if "SELECT" in sql_query.upper() and not re.search(r'\blimit\b', sql_query, re.IGNORECASE):
+                has_semicolon = False
+                query_stripped = sql_query.rstrip()
+                if query_stripped.endswith(';'):
+                    query_stripped = query_stripped[:-1].rstrip()
+                    has_semicolon = True
+                sql_query = f"{query_stripped} LIMIT 100"
+                if has_semicolon:
+                    sql_query += ";"
+                print(f"-> Limit enforced. Wrapped query: {sql_query}")
+                
+                # Update the message in-place in the graph state so the modified query is returned and displayed
+                target_msg.content = sql_query
+
             result = self.run_query_tool.invoke(sql_query)
+            if isinstance(result, str) and (result.startswith("Error") or "Error:" in result):
+                raise ValueError(result)
+                
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
             
             latencies = state.get("latencies", {}).copy()
             latencies["execution"] = latencies.get("execution", 0.0) + elapsed_ms
             return {"messages": [AIMessage(content=result)], "latencies": latencies}
         except Exception as e:
-            result = f"Error executing query: {str(e)}"
+            err_str = str(e)
+            is_security = "Security violation" in err_str or "readonly database" in err_str
+            if is_security and not err_str.startswith("Security violation"):
+                result = f"Error executing query: Security violation: {err_str}"
+            else:
+                result = f"Error executing query: {err_str}"
             print(f"-> Query Execution Failed: {result}")
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
             
             latencies = state.get("latencies", {}).copy()
             latencies["execution"] = latencies.get("execution", 0.0) + elapsed_ms
             current_retries = state.get("retries", 0)
+            
+            # If it's a security violation, do NOT increment retries
+            next_retries = current_retries if is_security else current_retries + 1
             return {
                 "messages": [AIMessage(content=result)],
-                "retries": current_retries + 1,
+                "retries": next_retries,
                 "latencies": latencies
             }
 
@@ -206,6 +268,10 @@ class EHRQueryAgent:
         last_msg = state["messages"][-1].content
         retries = state.get("retries", 0)
         
+        if "Security violation" in last_msg:
+            print("\n[Router] Security violation detected. Routing to summarize_results immediately...")
+            return "summarize_results"
+            
         if last_msg.startswith("Error executing query:") and retries < 2:
             print(f"\n[Router] Query failed. Retry count: {retries}/2. Routing back to generate_query...")
             return "generate_query"
@@ -229,6 +295,15 @@ class EHRQueryAgent:
             elif not db_result:
                 db_result = content
                 break
+
+        # Check for security violation first to bypass LLM and return static response
+        if "Security violation" in db_result:
+            summary_content = "This query was blocked because it violates database security guardrails (read-only enforcement). Only safe SELECT queries are permitted."
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            
+            latencies = state.get("latencies", {}).copy()
+            latencies["summarization"] = latencies.get("summarization", 0.0) + elapsed_ms
+            return {"messages": [AIMessage(content=summary_content)], "latencies": latencies}
 
         # Truncate database result if it exceeds a safe size (e.g. 5000 characters)
         # to prevent triggering Web Application Firewall (WAF) request body limits (403 Forbidden)

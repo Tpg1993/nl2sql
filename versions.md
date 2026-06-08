@@ -4,7 +4,16 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
-## [v4_sarvam_enhanced_agent](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md#v4_sarvam_enhanced_agent) (Current Branch)
+## [v5_sarvam_sql_guardrails](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md#v5_sarvam_sql_guardrails) (Current Branch)
+*   **Release Focus**: SQL security guardrails, read-only engine hardening, query limit constraints, and safe error handling.
+*   **SQL Safety Auditor**: Introduces a regex-based pre-execution audit block (`audit_sql_query`) to intercept write, drop, or schema alteration keywords (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, etc.) outside SQL string literals.
+*   **Read-Only Engine Hardening**: Configures SQLite database connections using URI parameters (`mode=ro` with `uri=True`) to block modifications at the database engine level, raising engine-level `OperationalError` upon write attempts.
+*   **Default SELECT Query Limits**: Automatically wraps `SELECT` queries missing `LIMIT` constraints with a default `LIMIT 100` boundary to protect server memory and browser rendering performance.
+*   **Safe Error Handling & Graph Routing**: Catches security exceptions and SQLite engine write errors within the graph, bypasses LLM summarization, and instantly routes to returning a structured static security warning.
+
+---
+
+## [v4_sarvam_enhanced_agent](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md#v4_sarvam_enhanced_agent)
 *   **Release Focus**: Self-healing agent loops, clinical summaries, latency metrics, interactive schema browser, and syntax highlighting.
 *   **Self-Healing Loop**: Tracks query failures using a custom `AgentState` retry counter. If SQL execution fails, the agent routes back to the LLM with error context to heal the syntax automatically.
 *   **Conversational Summaries**: Adds a `summarize_results` node to synthesize raw table outcomes into natural language clinical summaries.
