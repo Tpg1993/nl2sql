@@ -21,6 +21,10 @@
     
     --shadow-main: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    
+    --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+    --scrollbar-thumb-hover: rgba(157, 78, 221, 0.65);
+    --scrollbar-track: rgba(255, 255, 255, 0.02);
 }
 
 /* Light Theme variables override */
@@ -45,6 +49,10 @@ body[data-theme="light"] {
     --error-bg: rgba(239, 68, 68, 0.08);
     
     --shadow-main: 0 8px 32px 0 rgba(15, 23, 42, 0.06);
+    
+    --scrollbar-thumb: rgba(15, 23, 42, 0.25);
+    --scrollbar-thumb-hover: rgba(123, 44, 191, 0.65);
+    --scrollbar-track: rgba(15, 23, 42, 0.03);
 }
 
 * {
@@ -397,27 +405,27 @@ body {
 .messages-container::-webkit-scrollbar,
 .schema-browser::-webkit-scrollbar,
 .result-table-wrapper::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
 }
 
 .messages-container::-webkit-scrollbar-track,
 .schema-browser::-webkit-scrollbar-track,
 .result-table-wrapper::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--scrollbar-track);
 }
 
 .messages-container::-webkit-scrollbar-thumb,
 .schema-browser::-webkit-scrollbar-thumb,
 .result-table-wrapper::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--scrollbar-thumb);
     border-radius: 10px;
 }
 
 .messages-container::-webkit-scrollbar-thumb:hover,
 .schema-browser::-webkit-scrollbar-thumb:hover,
 .result-table-wrapper::-webkit-scrollbar-thumb:hover {
-    background: rgba(157, 78, 221, 0.3);
+    background: var(--scrollbar-thumb-hover);
 }
 
 /* =====================================================================
