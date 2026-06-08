@@ -395,23 +395,28 @@ body {
 
 /* Custom Scrollbar */
 .messages-container::-webkit-scrollbar,
-.schema-browser::-webkit-scrollbar {
+.schema-browser::-webkit-scrollbar,
+.result-table-wrapper::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
 }
 
 .messages-container::-webkit-scrollbar-track,
-.schema-browser::-webkit-scrollbar-track {
+.schema-browser::-webkit-scrollbar-track,
+.result-table-wrapper::-webkit-scrollbar-track {
     background: transparent;
 }
 
 .messages-container::-webkit-scrollbar-thumb,
-.schema-browser::-webkit-scrollbar-thumb {
+.schema-browser::-webkit-scrollbar-thumb,
+.result-table-wrapper::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 10px;
 }
 
 .messages-container::-webkit-scrollbar-thumb:hover,
-.schema-browser::-webkit-scrollbar-thumb:hover {
+.schema-browser::-webkit-scrollbar-thumb:hover,
+.result-table-wrapper::-webkit-scrollbar-thumb:hover {
     background: rgba(157, 78, 221, 0.3);
 }
 
@@ -552,6 +557,8 @@ body {
     border: 1px solid var(--border-glass);
     border-radius: 10px;
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 300px;
     background-color: rgba(0, 0, 0, 0.15);
     max-width: 100%;
 }

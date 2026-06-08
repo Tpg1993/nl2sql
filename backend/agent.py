@@ -230,6 +230,12 @@ class EHRQueryAgent:
                 db_result = content
                 break
 
+        # Truncate database result if it exceeds a safe size (e.g. 5000 characters)
+        # to prevent triggering Web Application Firewall (WAF) request body limits (403 Forbidden)
+        if len(db_result) > 5000:
+            print(f"-> Truncating large database result from {len(db_result)} to 5000 characters to prevent API payload limits.")
+            db_result = db_result[:5000] + "\n... [Truncated for LLM payload size limits]"
+
         if db_result.startswith("Error executing query:"):
             prompt = f"""Write a brief, polite response explaining that we couldn't resolve the database query due to an execution error.
             
