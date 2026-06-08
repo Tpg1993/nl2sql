@@ -5,12 +5,14 @@ This document tracks the feature additions, database routing, model integrations
 ---
 
 ## [v3_sarvam_redis_cache](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/versions.md#v3_sarvam_redis_cache) (Current Branch)
-*   **Release Focus**: Production-ready hybrid query caching.
+*   **Release Focus**: Production-ready hybrid query caching, cost-savings visuals, and UI theme controls.
 *   **Database Engine**: Works on both local SQLite and remote Databricks SQL Warehouse.
 *   **Caching Layer**:
     *   Dynamic checking for `REDIS_URL` in the environment.
     *   If active, boots distributed **Redis** caching to speed up recurring queries and save execution costs.
     *   Cascades automatically back to a local programmatically-evicted **SQLite** cache if Redis is unconfigured or offline.
+*   **Token Savings Visuals**: API responses flag `"cached": True` on hits, updating the UI panel to green highlights, listing saved token metrics, and displaying a cost-saving notification banner.
+*   **Theme Switcher Controls**: Dynamic Light and Dark themes with full support for glassmorphic elements and local storage theme persistence.
 *   **Dependencies**: Added `redis==5.0.4`.
 
 ---

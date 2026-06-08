@@ -156,7 +156,7 @@ async function submitQuestion(question) {
         
         const data = await response.json();
         if (data.success) {
-            appendAssistantResponse(data.query, data.result, data.tokens);
+            appendAssistantResponse(data.query, data.result, data.tokens, data.cached);
         } else {
             appendAssistantError(data.error || "An error occurred during query generation.");
         }
@@ -260,7 +260,7 @@ function extractHeaders(sql) {
 }
 
 // Append Assistant Success Response bubble (SQL, Table, and Tokens)
-function appendAssistantResponse(sqlQuery, queryResult, tokens) {
+function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false) {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
@@ -339,26 +339,37 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens) {
                 
                 <!-- Token Usage (Collapsible) -->
                 ${tokens ? `
-                <div class="token-details-container">
-                    <details class="token-details">
+                <div class="token-details-container ${cached ? 'cached-hit' : ''}">
+                    <details class="token-details" ${cached ? 'open' : ''}>
                         <summary>
-                            <span class="summary-title"><i class="fa-solid fa-bolt"></i> Token Usage Details</span>
+                            <span class="summary-title">
+                                ${cached 
+                                    ? `<i class="fa-solid fa-cloud-bolt"></i> Saved Token Usage (Cache Hit!)` 
+                                    : `<i class="fa-solid fa-bolt"></i> Token Usage Details`
+                                }
+                            </span>
                             <i class="fa-solid fa-chevron-down summary-arrow"></i>
                         </summary>
                         <div class="token-stats">
                             <div class="stat-item">
-                                <span class="stat-label">Input Tokens</span>
-                                <span class="stat-value">${tokens.input || '0'}</span>
+                                <span class="stat-label">${cached ? 'Saved Input' : 'Input Tokens'}</span>
+                                <span class="stat-value ${cached ? 'saved-highlight' : ''}">${tokens.input || '0'}</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-label">Output Tokens</span>
-                                <span class="stat-value">${tokens.output || '0'}</span>
+                                <span class="stat-label">${cached ? 'Saved Output' : 'Output Tokens'}</span>
+                                <span class="stat-value ${cached ? 'saved-highlight' : ''}">${tokens.output || '0'}</span>
                             </div>
-                            <div class="stat-item total">
-                                <span class="stat-label">Total Tokens</span>
+                            <div class="stat-item total ${cached ? 'saved' : ''}">
+                                <span class="stat-label">${cached ? 'Total Saved' : 'Total Tokens'}</span>
                                 <span class="stat-value">${tokens.total || '0'}</span>
                             </div>
                         </div>
+                        ${cached ? `
+                        <div class="cache-saving-banner">
+                            <i class="fa-solid fa-piggy-bank"></i>
+                            <span>Cost Saved: <strong>100%</strong> (Fast response served from cache)</span>
+                        </div>
+                        ` : ''}
                     </details>
                 </div>
                 ` : ''}
@@ -408,4 +419,38 @@ function appendAssistantError(errorMsg) {
 // Scroll to bottom of chat container
 function scrollToBottom() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// =====================================================================
+// THEME SWITCHER LOGIC
+// =====================================================================
+const themeToggleBtn = document.getElementById("theme-toggle-btn");
+const savedTheme = localStorage.getItem("theme") || "dark";
+
+// Apply current stored theme
+if (savedTheme === "light") {
+    document.body.setAttribute("data-theme", "light");
+    updateThemeIcon("light");
+} else {
+    document.body.setAttribute("data-theme", "dark");
+    updateThemeIcon("dark");
+}
+
+// Toggle click handler
+themeToggleBtn.addEventListener("click", () => {
+    const currentTheme = document.body.getAttribute("data-theme");
+    const nextTheme = currentTheme === "light" ? "dark" : "light";
+    
+    document.body.setAttribute("data-theme", nextTheme);
+    localStorage.setItem("theme", nextTheme);
+    updateThemeIcon(nextTheme);
+});
+
+function updateThemeIcon(theme) {
+    const icon = themeToggleBtn.querySelector("i");
+    if (theme === "light") {
+        icon.className = "fa-solid fa-moon";
+    } else {
+        icon.className = "fa-solid fa-sun";
+    }
 }

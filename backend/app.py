@@ -85,6 +85,7 @@ def run_query(request: QueryRequest):
                 "result": cached.get("result"),
                 "tokens": cached.get("tokens"),
                 "success": True,
+                "cached": True,
                 "error": None
             }
 
@@ -123,6 +124,7 @@ def run_query(request: QueryRequest):
             "result": parsed_data,
             "tokens": res["tokens"],
             "success": success,
+            "cached": False,
             "error": error_message
         }
     except Exception as e:
