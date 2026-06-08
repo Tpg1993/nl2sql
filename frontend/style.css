@@ -1187,4 +1187,71 @@ body[data-theme="light"] .meta-item.cache-badge {
     border-color: rgba(16, 185, 129, 0.2);
 }
 
+/* =====================================================================
+   AGENT METADATA PANEL & RETRY BADGES
+   ===================================================================== */
+.meta-item.retry-badge {
+    background-color: rgba(157, 78, 221, 0.08);
+    border: 1px solid rgba(157, 78, 221, 0.25);
+    color: var(--accent-secondary);
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.meta-item.retry-badge i {
+    color: var(--accent-secondary);
+}
+
+body[data-theme="light"] .meta-item.retry-badge {
+    background-color: rgba(157, 78, 221, 0.06);
+    border-color: rgba(157, 78, 221, 0.2);
+}
+
+.agent-metadata-panel {
+    border-top: 1px solid var(--border-glass);
+    padding: 12px 14px;
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+body[data-theme="light"] .agent-metadata-panel {
+    border-color: rgba(15, 23, 42, 0.08);
+}
+
+.agent-metadata-panel h4 {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+}
+
+.agent-meta-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.meta-detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+}
+
+.detail-label {
+    color: var(--text-secondary);
+}
+
+.detail-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.detail-value.healed-text {
+    color: var(--accent-secondary);
+}
+
 

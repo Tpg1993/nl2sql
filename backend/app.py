@@ -82,11 +82,20 @@ def run_query(request: QueryRequest):
         cached = cache_manager.get(request.question)
         if cached:
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            cached_tokens = cached.get("tokens") or {}
+            model = "Unknown Model"
+            retries = 0
+            if isinstance(cached_tokens, dict):
+                # Make a shallow copy before popping to avoid side-effects
+                cached_tokens = cached_tokens.copy()
+                model = cached_tokens.pop("model", "Unknown Model")
+                retries = cached_tokens.pop("retries", 0)
+            
             return {
                 "query": cached.get("query"),
                 "result": cached.get("result"),
                 "summary": cached.get("summary", ""),
-                "tokens": cached.get("tokens"),
+                "tokens": cached_tokens if cached_tokens else None,
                 "success": True,
                 "cached": True,
                 "latency_ms": elapsed_ms,
@@ -97,6 +106,8 @@ def run_query(request: QueryRequest):
                     "execution": 0.0,
                     "summarization": 0.0
                 },
+                "model": model,
+                "retries": retries,
                 "error": None
             }
 
@@ -125,12 +136,16 @@ def run_query(request: QueryRequest):
 
         # 3. Store in Cache if successfully executed
         if success and cache_manager:
+            cached_tokens_payload = {**(res["tokens"] or {})} if res["tokens"] else {}
+            cached_tokens_payload["model"] = res.get("model", "gpt-4o-mini")
+            cached_tokens_payload["retries"] = res.get("retries", 0)
+            
             cache_manager.set(
                 question=request.question,
                 query=res["query"],
                 result=parsed_data,
                 summary=conversational_summary,
-                tokens=res["tokens"]
+                tokens=cached_tokens_payload
             )
 
         return {
@@ -142,6 +157,8 @@ def run_query(request: QueryRequest):
             "cached": False,
             "latency_ms": elapsed_ms,
             "latency_breakdown": res.get("latency_breakdown", {}),
+            "model": res.get("model", "gpt-4o-mini"),
+            "retries": res.get("retries", 0),
             "error": error_message
         }
     except Exception as e:
@@ -156,5 +173,7 @@ def run_query(request: QueryRequest):
                 "generation": 0.0,
                 "execution": 0.0,
                 "summarization": 0.0
-            }
+            },
+            "model": "Unknown Model",
+            "retries": 0
         }

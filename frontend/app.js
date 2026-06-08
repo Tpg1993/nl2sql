@@ -183,7 +183,7 @@ async function submitQuestion(question) {
         
         const data = await response.json();
         if (data.success) {
-            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown);
+            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries);
         } else {
             appendAssistantError(data.error || "An error occurred during query generation.");
         }
@@ -336,7 +336,7 @@ function highlightSQL(sql) {
 }
 
 // Append Assistant Success Response bubble (SQL, Table, and Tokens)
-function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null) {
+function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null, model = "gpt-4o-mini", retries = 0) {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
@@ -418,11 +418,19 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                 <div class="query-meta-bar">
                     <span class="meta-item">
                         <i class="fa-regular fa-clock"></i> 
-                        Latency: <strong>${latencyMs !== null ? latencyMs + ' ms' : 'N/A'}</strong>
+                        Latency: <strong>${latencyMs !== null ? parseFloat(latencyMs).toFixed(2) + ' ms' : 'N/A'}</strong>
                         <span class="info-tooltip" data-tooltip="Total round-trip latency. On cache miss, this includes schema reflection, LLM query generation, database execution, and result summarization. On cache hit, this measures fast cache retrieval.">
                             <i class="fa-solid fa-circle-info"></i>
                         </span>
                     </span>
+                    <span class="meta-item">
+                        <i class="fa-solid fa-microchip"></i> 
+                        Model: <strong>${model}</strong>
+                    </span>
+                    ${retries > 0 
+                        ? `<span class="meta-item retry-badge"><i class="fa-solid fa-arrows-spin"></i> Retries: <strong>${retries}</strong> (Self-Healed)</span>`
+                        : `<span class="meta-item"><i class="fa-solid fa-check-double"></i> Retries: <strong>0</strong></span>`
+                    }
                     ${cached ? `<span class="meta-item cache-badge"><i class="fa-solid fa-cloud-bolt"></i> Served from Cache</span>` : ''}
                 </div>
                 
@@ -457,7 +465,7 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                         <div class="latency-info-row">
                             <i class="fa-regular fa-clock"></i>
                             <span>
-                                Execution Latency: <strong>${latencyMs !== null ? latencyMs + ' ms' : 'N/A'}</strong>
+                                Execution Latency: <strong>${latencyMs !== null ? parseFloat(latencyMs).toFixed(2) + ' ms' : 'N/A'}</strong>
                                 <span class="info-tooltip" data-tooltip="Total round-trip latency. On cache miss, this includes schema reflection, LLM query generation, database execution, and result summarization. On cache hit, this measures fast cache retrieval.">
                                     <i class="fa-solid fa-circle-info"></i>
                                 </span>
@@ -498,13 +506,29 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                                                 <i class="fa-solid fa-circle-info"></i>
                                             </span>
                                         </span>
-                                        <span class="stage-value">${ms} ms</span>
+                                        <span class="stage-value">${parseFloat(ms).toFixed(2)} ms</span>
                                     </div>
                                     `;
                                 }).join('')}
                             </div>
                         </div>
                         ` : ''}
+
+                        <div class="agent-metadata-panel">
+                            <h4>Agent Execution Context</h4>
+                            <div class="agent-meta-grid">
+                                <div class="meta-detail-item">
+                                    <span class="detail-label">AI Model Engine</span>
+                                    <span class="detail-value"><strong>${model}</strong></span>
+                                </div>
+                                <div class="meta-detail-item">
+                                    <span class="detail-label">Self-Healing Retries</span>
+                                    <span class="detail-value ${retries > 0 ? 'healed-text' : ''}">
+                                        <strong>${retries}</strong> ${retries > 0 ? '(Self-Healed SQL Syntax)' : '(Direct Compilation)'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
 
                         ${cached ? `
                         <div class="cache-saving-banner">

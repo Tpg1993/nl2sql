@@ -365,5 +365,7 @@ class EHRQueryAgent:
             "result": db_result,
             "summary": conversational_summary,
             "tokens": token_usage,
-            "latency_breakdown": latency_breakdown
+            "latency_breakdown": latency_breakdown,
+            "model": getattr(self.llm, "model_name", getattr(self.llm, "model", "gpt-4o-mini")),
+            "retries": output.get("retries", 0)
         }
