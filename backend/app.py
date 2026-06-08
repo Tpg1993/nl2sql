@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import inspect
 
 from .agent import EHRQueryAgent
+from .cache import get_cache_manager
 
 app = FastAPI(
     title="EHR SQL Agent API",
@@ -28,6 +29,14 @@ except Exception as e:
     print(f"Error initializing agent: {e}")
     # We will initialize it lazily in routes if needed, or raise
     agent = None
+
+# Initialize cache manager (defaults to 1 hour TTL)
+try:
+    cache_manager = get_cache_manager(ttl_seconds=3600)
+except Exception as e:
+    print(f"Error initializing cache manager: {e}")
+    cache_manager = None
+
 
 
 class QueryRequest(BaseModel):
@@ -67,6 +76,19 @@ def run_query(request: QueryRequest):
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
+    # 1. Attempt to serve from Cache
+    if cache_manager:
+        cached = cache_manager.get(request.question)
+        if cached:
+            return {
+                "query": cached.get("query"),
+                "result": cached.get("result"),
+                "tokens": cached.get("tokens"),
+                "success": True,
+                "error": None
+            }
+
+    # 2. Run agent if cache miss
     try:
         res = agent.query_detailed(request.question)
         raw_result = res["result"]
@@ -86,6 +108,15 @@ def run_query(request: QueryRequest):
             except Exception:
                 # Fallback to string if it cannot be parsed
                 parsed_data = raw_result
+
+        # 3. Store in Cache if successfully executed
+        if success and cache_manager:
+            cache_manager.set(
+                question=request.question,
+                query=res["query"],
+                result=parsed_data,
+                tokens=res["tokens"]
+            )
 
         return {
             "query": res["query"],

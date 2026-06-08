@@ -7,10 +7,12 @@ An agentic AI application that translates plain English questions into SQL queri
 *   **Agentic LangGraph Pipeline**: A 4-stage sequential state graph (`list_tables` -> `get_schema` -> `generate_query` -> `execute_query`) with built-in query syntax error handling.
 *   **Dual LLM Router**: Detects and boots specialized primary models (e.g. `sarvam-105b`) when a Sarvam API key is provided, cascading to OpenAI (`gpt-4o-mini`) as a backup layer.
 *   **FastAPI Backend Server**: Exposes REST API routes for executing natural language queries and fetching reflected database table schemas.
+*   **Hybrid Query Caching (v3)**: Highly performant cache system supporting distributed **Redis** (for high-scale production) and dynamically falling back to local **SQLite** (for zero-setup local demoing).
 *   **Premium Chat Dashboard**: A beautiful, dark glassmorphic single-page web client that displays:
     *   A live sidebar browser of database tables and columns.
     *   The generated SQL statements with a one-click copy button.
     *   Dynamic, responsive HTML tables generated from SQL query outputs.
+    *   Collapsible details panel showing real-time token usage metrics.
 
 
 ## Architecture Diagram
@@ -83,6 +85,7 @@ NL2SQL/
 ├── backend/
 │   ├── agent.py             # LangGraph state machine & LLM connection
 │   ├── app.py               # FastAPI web server and routes
+│   ├── cache.py             # Hybrid cache manager (SQLite & Redis)
 │   ├── requirements.txt     # Python dependencies for the backend
 │   ├── .env                 # API Keys (gitignored)
 │   └── ehr_data.db          # SQLite Database (gitignored)
@@ -107,7 +110,12 @@ NL2SQL/
 ```bash
 git clone https://github.com/Tpg1993/nl2sql.git
 cd nl2sql
-git checkout v1_sarvam_local_sql
+
+# Version branches:
+# - v1_sarvam_local_sql       (SQLite Database Setup)
+# - v2_sarvam_databricks_sql   (Databricks Connection Support)
+# - v3_sarvam_redis_cache     (Redis Caching & SQLite Fallback Support)
+git checkout v3_sarvam_redis_cache
 ```
 
 ### 2. Set Up Virtual Environment
@@ -140,6 +148,10 @@ DATABRICKS_TOKEN=dapi-your-personal-access-token
 DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/your-http-path
 DATABRICKS_CATALOG=main
 DATABRICKS_SCHEMA=default
+
+# Production Redis Cache Settings (v3)
+# Leave blank to fallback dynamically to local SQLite caching
+REDIS_URL=redis://localhost:6379/0
 ```
 
 ### 5. Setup Database
