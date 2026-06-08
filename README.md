@@ -152,4 +152,12 @@ uvicorn backend.app:app --host 127.0.0.1 --port 8000 --reload
 The API docs will be available at `http://127.0.0.1:8000/docs`.
 
 ### Launch the Frontend Dashboard
-Simply open the `frontend/index.html` file in any modern web browser (e.g. Chrome, Firefox, Safari) by double-clicking it. It will connect to the local API automatically!
+Simply open the `frontend/index.html` file in any modern web browser (e.g. Chrome, Firefox, Safari) by double-clicking it. It will connect to the local API automatically! Alternatively, if the frontend server is running, visit `http://localhost:3000`.
+
+---
+
+## Verification & Test Suite
+
+To verify the accuracy and performance of the agent, we have compiled a set of simple, medium, and complex questions with their expected SQL translations:
+👉 **[EHR Test Cases & Verification Prompts](test_cases.md)**
+
