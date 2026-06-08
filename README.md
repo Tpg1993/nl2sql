@@ -133,10 +133,18 @@ Create a `.env` file inside the `backend/` directory:
 # Inside backend/.env
 SARVAM_API_KEY=your_sarvam_api_key_here
 OPENAI_API_KEY=your_openai_api_key_here # Fallback backup
+
+# Remote Databricks Connection Settings (v2)
+DATABRICKS_HOST=your-workspace-hostname.cloud.databricks.com
+DATABRICKS_TOKEN=dapi-your-personal-access-token
+DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/your-http-path
+DATABRICKS_CATALOG=main
+DATABRICKS_SCHEMA=default
 ```
 
 ### 5. Setup Database
-Ensure your populated SQLite database is placed in the `backend/` directory:
+If you do not configure the Databricks environment variables, the system will gracefully fall back to local SQLite.
+Make sure the SQLite database file is placed in:
 *   File path: `backend/ehr_data.db`
 
 ---

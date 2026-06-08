@@ -24,9 +24,20 @@ class EHRQueryAgent:
     def __init__(self, db_uri: str = None) -> None:
         # Resolve DB path dynamically if not provided
         if db_uri is None:
-            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-            db_path = os.path.join(BASE_DIR, "ehr_data.db")
-            db_uri = f"sqlite:///{db_path}"
+            databricks_host = os.environ.get("DATABRICKS_HOST")
+            databricks_token = os.environ.get("DATABRICKS_TOKEN")
+            databricks_http_path = os.environ.get("DATABRICKS_HTTP_PATH")
+            databricks_catalog = os.environ.get("DATABRICKS_CATALOG", "main")
+            databricks_schema = os.environ.get("DATABRICKS_SCHEMA", "default")
+            
+            if databricks_host and databricks_token and databricks_http_path:
+                print("\n[DB Router] DATABRICKS credentials discovered. Booting Databricks connection...")
+                db_uri = f"databricks://token:{databricks_token}@{databricks_host}?http_path={databricks_http_path}&catalog={databricks_catalog}&schema={databricks_schema}"
+            else:
+                print("\n[DB Router] No Databricks credentials found. Cascading to local SQLite...")
+                BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+                db_path = os.path.join(BASE_DIR, "ehr_data.db")
+                db_uri = f"sqlite:///{db_path}"
 
         # Initialize connection and db utility
         self.engine = create_engine(db_uri)
