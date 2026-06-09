@@ -84,13 +84,15 @@ class EHRQueryAgent:
                 "Required database tools (list tables, get schema, run query) were not found in the toolkit."
             ) from e
 
-        # Initialize semantic layer, planner, and override cache store
+        # Initialize semantic layer, planner, override cache store, and prompt library
         from .semantic_layer import SemanticLayer
         from .planner import CostPlanner
         from .expert_overrides import ExpertOverrideStore
+        from .prompts import PromptLibrary
         self.semantic_layer = SemanticLayer()
         self.cost_planner = CostPlanner(self.engine)
         self.override_store = ExpertOverrideStore()
+        self.prompt_library = PromptLibrary()
 
         # Build and compile LangGraph state machine
         self.agent = self._compile_graph()
@@ -173,30 +175,12 @@ class EHRQueryAgent:
             if last_msg.startswith("Error executing query:"):
                 previous_error = last_msg
 
-        prompt = f"""You are an SQL database query expert. Generate the correct query matching the schema and semantic layer rules below.
-        
-        User Query Request: {user_question}
-        
-        Database Semantic Layer Context (Business logic definitions, calculations, and join keys):
-        {self.semantic_layer.get_context_prompt()}
-        
-        Database Schema Context (Raw table schema details):
-        {db_schema}
-        
-        Rules:
-        - Use ONLY safe SELECT operations. Do not update, alter, append, or drop tables.
-        - Return ONLY the clean, raw SQL string payload. Do not wrap it in markdown framing like ```sql.
-        - Prioritize using the join relationships defined in the semantic layer relationships.
-        - Prioritize formulas in the metrics list for calculations (e.g. active allergies calculation).
-        """
-
-        if previous_error:
-            prompt += f"""
-
-            WARNING: The SQL query you previously generated failed with the following execution error:
-            {previous_error}
-
-            Analyze the error, raw schema, and semantic layer. Generate a corrected SQL query using only valid, existing column names and SQL syntax. Avoid repeating the same mistake."""
+        prompt = self.prompt_library.format_sql_generation(
+            user_question=user_question,
+            semantic_context=self.semantic_layer.get_context_prompt(),
+            db_schema=db_schema,
+            previous_error=previous_error
+        )
         
         result = self.llm.invoke(prompt)
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
@@ -380,16 +364,12 @@ class EHRQueryAgent:
             print(f"-> Truncating large database result from {len(db_result)} to 5000 characters to prevent API payload limits.")
             db_result = db_result[:5000] + "\n... [Truncated for LLM payload size limits]"
 
-        if db_result.startswith("Error executing query:"):
-            prompt = f"""Write a brief, polite response explaining that we couldn't resolve the database query due to an execution error.
-            
-            Original Question: {user_question}
-            Error Details: {db_result}"""
-        else:
-            prompt = f"""You are a clinical data summarizer. Write a clean, brief natural language response answering the user's clinical question based directly on the database query results. Keep it simple and direct. Do not explain SQL syntax or mention table names.
-            
-            User Question: {user_question}
-            Database Result: {db_result}"""
+        is_error = db_result.startswith("Error executing query:")
+        prompt = self.prompt_library.format_summarization(
+            user_question=user_question,
+            db_result=db_result,
+            error_context=is_error
+        )
             
         result = self.llm.invoke(prompt)
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)

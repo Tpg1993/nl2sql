@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from backend.semantic_layer import SemanticLayer
 from backend.planner import CostPlanner
 from backend.expert_overrides import ExpertOverrideStore
+from backend.prompts import PromptLibrary
 
 class TestEnterpriseNL2SQL(unittest.TestCase):
 
@@ -68,6 +69,30 @@ class TestEnterpriseNL2SQL(unittest.TestCase):
         # Test case-insensitivity and whitespace trim
         override_variant = self.override_store.get_override("  Give me patient summary counts  ")
         self.assertEqual(override_variant, sql)
+
+    def test_prompt_library_loading(self):
+        library = PromptLibrary()
+        self.assertIn("sql_generation.txt", library.templates)
+        self.assertIn("summarization.txt", library.templates)
+        
+        # Test formatting
+        formatted_sql = library.format_sql_generation(
+            user_question="How many patients?",
+            semantic_context="Logical Entities",
+            db_schema="CREATE TABLE patients"
+        )
+        self.assertIn("How many patients?", formatted_sql)
+        self.assertIn("Logical Entities", formatted_sql)
+        self.assertIn("CREATE TABLE patients", formatted_sql)
+        
+        # Test retry format injection
+        formatted_retry = library.format_sql_generation(
+            user_question="How many patients?",
+            semantic_context="Logical Entities",
+            db_schema="CREATE TABLE patients",
+            previous_error="Syntax error near select"
+        )
+        self.assertIn("Syntax error near select", formatted_retry)
 
 if __name__ == "__main__":
     unittest.main()

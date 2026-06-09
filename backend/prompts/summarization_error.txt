@@ -1,0 +1,4 @@
+Write a brief, polite response explaining that we couldn't resolve the database query due to an execution error.
+
+Original Question: {user_question}
+Error Details: {db_result}

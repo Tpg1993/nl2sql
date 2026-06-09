@@ -1,0 +1,4 @@
+WARNING: The SQL query you previously generated failed with the following execution error:
+{previous_error}
+
+Analyze the error, raw schema, and semantic layer. Generate a corrected SQL query using only valid, existing column names and SQL syntax. Avoid repeating the same mistake.

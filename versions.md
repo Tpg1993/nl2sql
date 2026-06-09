@@ -5,8 +5,9 @@ This document tracks the feature additions, database routing, model integrations
 ---
 
 ## [v7_sarvam_enterprise_suite](#v7_sarvam_enterprise_suite) (Current Branch)
-*   **Release Focus**: Decoupled Semantic Layer, Cost-Aware Execution Planner, Federated Querying, Lineage-Backed Audit Trails, and Expert Override (RLHF) Loop.
+*   **Release Focus**: Decoupled Semantic Layer, Decoupled Prompt Library, Cost-Aware Execution Planner, Federated Querying, Lineage-Backed Audit Trails, and Expert Override (RLHF) Loop.
 *   **Semantic Layer**: Integrates a `semantic_layer.yaml` mapping business metrics and entities (e.g. "patient summary counts") to database columns and tables. Pre-compiles logical definitions into LLM context prompts, ensuring generated SQL queries align with organizational metrics.
+*   **Decoupled Prompt Library**: Extracts hardcoded LLM prompts from Python agent code into parameterizable flat text files under `backend/prompts/` (e.g. `sql_generation.txt`, `summarization.txt`). Managed by a dynamic `PromptLibrary` loader, this allows easily adapting the agent core to other business domains by simply switching the text templates.
 *   **Cost-Aware Execution Planner**: Intercepts expensive queries by analyzing SQLite/Databricks query execution plans (`EXPLAIN`). Blocks Cartesian products or high-cost scans before execution, preventing database overloading.
 *   **Federated Querying**: Implements a router to handle distributed queries, dynamically joining local SQLite tables (e.g., patient metadata) with simulated remote Databricks SQL Warehouse tables.
 *   **Lineage-Backed Audit Trails**: Automatically parses generated SQL to extract table/column dependencies, joins, and filters. Visualizes query lineage pathways in the frontend, providing clinical compliance tracking.
