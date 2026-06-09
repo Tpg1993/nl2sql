@@ -17,6 +17,7 @@ class SemanticLayer:
         self.entities = self.config.get("entities", {})
         self.relationships = self.config.get("relationships", [])
         self.metrics = self.config.get("metrics", {})
+        self.security_policies = self.config.get("security_policies", {})
 
     def _load_config(self) -> Dict[str, Any]:
         if not os.path.exists(self.config_path):
@@ -37,7 +38,8 @@ class SemanticLayer:
             prompt += "    Logical to Physical Field Mappings:\n"
             fields = details.get("fields", {})
             for logical, physical in fields.items():
-                prompt += f"      * {logical} -> {physical}\n"
+                col_name = physical.get("column_name") if isinstance(physical, dict) else physical
+                prompt += f"      * {logical} -> {col_name}\n"
             prompt += "\n"
 
         prompt += "2. RELATIONSHIPS / JOINS (Always join tables using these rules):\n"
@@ -64,7 +66,10 @@ class SemanticLayer:
         entity = self.entities.get(entity_name)
         if not entity:
             return None
-        return entity.get("fields", {}).get(logical_field)
+        val = entity.get("fields", {}).get(logical_field)
+        if isinstance(val, dict):
+            return val.get("column_name")
+        return val
 
     def get_table_name(self, entity_name: str) -> str:
         """Returns the physical table name for a given entity."""
@@ -72,3 +77,22 @@ class SemanticLayer:
         if not entity:
             return None
         return entity.get("table_name")
+
+    def get_column_classification(self, table_name: str, column_name: str) -> str:
+        """Scans entities to find the classification of a physical column in a physical table."""
+        # Clean potential table prefixes from column_name (e.g. patients.full_name -> full_name)
+        clean_col = column_name.split('.')[-1].strip('`"\'')
+        for entity_name, details in self.entities.items():
+            if details.get("table_name") == table_name:
+                for logical, field_val in details.get("fields", {}).items():
+                    if isinstance(field_val, dict):
+                        if field_val.get("column_name") == clean_col:
+                            return field_val.get("classification")
+                    elif field_val == clean_col:
+                        return None
+        return None
+
+    def get_security_policies(self) -> Dict[str, Any]:
+        """Returns the security policies dictionary."""
+        return self.security_policies
+

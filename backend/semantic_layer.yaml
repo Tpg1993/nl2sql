@@ -8,11 +8,19 @@ entities:
     fields:
       id: "patient_id"
       mrn: "mrn"
-      name: "full_name"
+      name:
+        column_name: "full_name"
+        classification: "pii_name"
       gender: "gender"
-      birth_date: "dob"
-      phone: "phone"
-      email: "email"
+      birth_date:
+        column_name: "dob"
+        classification: "pii_dob"
+      phone:
+        column_name: "phone"
+        classification: "pii_phone"
+      email:
+        column_name: "email"
+        classification: "pii_email"
       city: "city"
       state: "state"
       blood_group: "blood_group"
@@ -55,7 +63,9 @@ entities:
       status: "encounter_status"
       admission_date: "admission_dt"
       discharge_date: "discharge_dt"
-      charges: "total_charges"
+      charges:
+        column_name: "total_charges"
+        classification: "financial"
       payment_status: "payment_status"
       chief_complaint: "chief_complaint"
 
@@ -191,3 +201,24 @@ metrics:
     formula: "SELECT COUNT(*) FROM medications WHERE is_active = 1"
     filters:
       active: "is_active = 1"
+
+security_policies:
+  roles:
+    admin:
+      clearance: "unrestricted"
+    researcher:
+      masking_rules:
+        pii_name: "mask_name"
+        pii_dob: "mask_dob"
+        pii_phone: "mask_phone"
+        pii_email: "mask_email"
+        financial: "redact"
+    doctor:
+      masking_rules:
+        financial: "redact"
+      abac_policies:
+        - entity_context: "Patient"
+          attribute_match:
+            user_attribute: "department_id"
+            db_column: "department_id"
+          fallback_action: "mask"

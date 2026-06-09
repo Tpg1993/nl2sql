@@ -26,6 +26,8 @@ class AgentState(MessagesState):
     is_expert_matched: bool
     estimated_cost: float
     lineage: Dict[str, Any]
+    pii_params: Dict[str, str]
+
 
 class EHRQueryAgent:
     """An agent that translates natural language queries to SQL, executes them 
@@ -97,7 +99,42 @@ class EHRQueryAgent:
         # Build and compile LangGraph state machine
         self.agent = self._compile_graph()
 
+    def sanitize_and_extract_pii(self, question: str) -> tuple:
+        """Redacts phone numbers, emails, and SSNs from the question, returning a tuple
+        of (sanitized_question, parameter_map).
+        """
+        sanitized = question
+        pii_params = {}
+        param_counter = 0
+        
+        # 1. Email matching (ensuring we don't consume trailing punctuation like sentence periods)
+        emails = re.findall(r"\b[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]*[a-zA-Z0-9-]\b", sanitized)
+        for email in list(set(emails)):
+            placeholder = f"PII_PARAM_{param_counter}"
+            pii_params[placeholder] = email
+            sanitized = sanitized.replace(email, placeholder)
+            param_counter += 1
+            
+        # 2. Phone number matching (covering 7-digit local and 10-digit national/international formats)
+        phones = re.findall(r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?(?:\d{3}[-.\s]?)?\d{4}\b", sanitized)
+        for phone in list(set(phones)):
+            placeholder = f"PII_PARAM_{param_counter}"
+            pii_params[placeholder] = phone
+            sanitized = sanitized.replace(phone, placeholder)
+            param_counter += 1
+            
+        # 3. SSN matching
+        ssns = re.findall(r"\b\d{3}-\d{2}-\d{4}\b", sanitized)
+        for ssn in list(set(ssns)):
+            placeholder = f"PII_PARAM_{param_counter}"
+            pii_params[placeholder] = ssn
+            sanitized = sanitized.replace(ssn, placeholder)
+            param_counter += 1
+            
+        return sanitized, pii_params
+
     def _init_llm(self) -> ChatOpenAI:
+
         """Initializes the LLM, defaulting to Sarvam AI if API key is present,
         otherwise cascading to OpenAI backup layer.
         """
@@ -226,7 +263,14 @@ class EHRQueryAgent:
                     target_msg = msg
                     break
         
+        # Restore PII parameter values in the SQL query text before safety checks and execution
+        pii_params = state.get("pii_params", {})
+        for placeholder, original_val in pii_params.items():
+            sql_query = sql_query.replace(placeholder, original_val)
+        target_msg.content = sql_query
+
         try:
+
             # Security Guardrail Check
             self.audit_sql_query(sql_query)
 
@@ -490,33 +534,38 @@ class EHRQueryAgent:
         return builder.compile()
 
     def query(self, question: str) -> str:
-        """Runs the compiled graph workflow for a natural language question."""
+        """Runs the compiled graph workflow for a natural language question, sanitizing input PII."""
+        sanitized_question, pii_params = self.sanitize_and_extract_pii(question)
         initial_state = {
-            "messages": [HumanMessage(content=question)],
+            "messages": [HumanMessage(content=sanitized_question)],
             "retries": 0,
             "latencies": {
                 "schema": 0.0,
                 "generation": 0.0,
                 "execution": 0.0,
                 "summarization": 0.0
-            }
+            },
+            "pii_params": pii_params
         }
         output = self.agent.invoke(initial_state)
         return output["messages"][-1].content
 
     def query_detailed(self, question: str) -> dict:
         """Runs the compiled graph workflow and returns generated SQL, DB results, conversational summary, and LLM token usage."""
+        sanitized_question, pii_params = self.sanitize_and_extract_pii(question)
         initial_state = {
-            "messages": [HumanMessage(content=question)],
+            "messages": [HumanMessage(content=sanitized_question)],
             "retries": 0,
             "latencies": {
                 "schema": 0.0,
                 "generation": 0.0,
                 "execution": 0.0,
                 "summarization": 0.0
-            }
+            },
+            "pii_params": pii_params
         }
         output = self.agent.invoke(initial_state)
+
         
         sql_query = ""
         db_result = ""

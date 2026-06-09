@@ -36,8 +36,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 # Bearer Authorization Scheme
 security_scheme = HTTPBearer(auto_error=False)
 
-def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)) -> str:
-    """FastAPI dependency to extract and validate the JWT bearer token from requests."""
+def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)) -> dict:
+    """FastAPI dependency to extract and validate the JWT bearer token from requests, returning user context."""
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -55,7 +55,11 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depen
                 detail="Token authentication failed: subject missing.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        return username
+        return {
+            "username": username,
+            "role": payload.get("role", "researcher"),
+            "attributes": payload.get("attributes", {})
+        }
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -68,3 +72,4 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depen
             detail="Invalid signature or malformed token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+

@@ -16,14 +16,17 @@ const sendButton = document.getElementById("send-button");
 // On Load: Check auth, fetch schema metadata, and initialize collapsible sidebar
 window.addEventListener("DOMContentLoaded", () => {
     initSidebarCollapse();
+    initLogout();
     
     const token = localStorage.getItem("access_token");
     if (!token) {
         document.getElementById("login-overlay").style.display = "flex";
     } else {
+        updateAuthUI();
         fetchSchemaMetadata();
     }
 });
+
 
 // Helper to compile authorization headers
 function getAuthHeaders() {
@@ -399,22 +402,34 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
         }
         tableHtml += `</tr></thead><tbody>`;
         
+        // Helper to check and style masked/PII redacted fields with lock icons
+        const formatCell = (cell) => {
+            if (cell === null) return `<td><span class="null-value" style="color:var(--text-muted); font-size:0.8rem; font-style:italic;">NULL</span></td>`;
+            const cellStr = String(cell);
+            const isMasked = cellStr.includes("***") || cellStr.includes("****-") || cellStr === "[RESTRICTED]";
+            if (isMasked) {
+                return `<td style="color: var(--text-muted); font-style: italic; font-weight: 500;"><i class="fa-solid fa-lock" style="font-size:0.7rem; margin-right:5px; opacity:0.6; color: #a78bfa;"></i>${cell}</td>`;
+            }
+            return `<td>${cell}</td>`;
+        };
+
         // Populate Rows
         queryResult.forEach(row => {
             tableHtml += `<tr>`;
             if (Array.isArray(row)) {
                 row.forEach(cell => {
-                    tableHtml += `<td>${cell === null ? 'NULL' : cell}</td>`;
+                    tableHtml += formatCell(cell);
                 });
             } else if (typeof row === 'object' && row !== null) {
                 Object.values(row).forEach(cell => {
-                    tableHtml += `<td>${cell === null ? 'NULL' : cell}</td>`;
+                    tableHtml += formatCell(cell);
                 });
             } else {
-                tableHtml += `<td>${row === null ? 'NULL' : row}</td>`;
+                tableHtml += formatCell(row);
             }
             tableHtml += `</tr>`;
         });
+
         
         tableHtml += `</tbody></table>`;
     }
@@ -726,6 +741,7 @@ if (loginForm) {
             
             const data = await response.json();
             localStorage.setItem("access_token", data.access_token);
+            updateAuthUI();
             
             // Hide overlay and reset inputs
             loginOverlay.style.display = "none";
@@ -880,3 +896,67 @@ if (toggleSidebarExpandBtn) {
         localStorage.setItem("sidebar_state", "expanded");
     });
 }
+
+// =====================================================================
+// JWT & COMPLIANCE AUTH DECORATOR LOGIC
+// =====================================================================
+function parseJwt(token) {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    } catch (e) {
+        return null;
+    }
+}
+
+function updateAuthUI() {
+    const token = localStorage.getItem("access_token");
+    const badgeEl = document.getElementById("user-role-badge");
+    const roleTextEl = document.getElementById("user-role-text");
+    const logoutEl = document.getElementById("logout-btn");
+    
+    if (token) {
+        const payload = parseJwt(token);
+        if (payload && payload.role) {
+            if (badgeEl) badgeEl.style.display = "inline-flex";
+            if (logoutEl) logoutEl.style.display = "inline-flex";
+            
+            const roleName = payload.role.charAt(0).toUpperCase() + payload.role.slice(1);
+            if (roleTextEl) roleTextEl.textContent = roleName;
+            
+            if (badgeEl) {
+                if (payload.role === "admin") {
+                    badgeEl.style.background = "rgba(239, 68, 68, 0.15)";
+                    badgeEl.style.borderColor = "rgba(239, 68, 68, 0.4)";
+                    badgeEl.style.color = "#FCA5A5";
+                } else if (payload.role === "doctor") {
+                    badgeEl.style.background = "rgba(59, 130, 246, 0.15)";
+                    badgeEl.style.borderColor = "rgba(59, 130, 246, 0.4)";
+                    badgeEl.style.color = "#93C5FD";
+                } else {
+                    badgeEl.style.background = "rgba(16, 185, 129, 0.15)";
+                    badgeEl.style.borderColor = "rgba(16, 185, 129, 0.4)";
+                    badgeEl.style.color = "#A7F3D0";
+                }
+            }
+        }
+    } else {
+        if (badgeEl) badgeEl.style.display = "none";
+        if (logoutEl) logoutEl.style.display = "none";
+    }
+}
+
+function initLogout() {
+    const logoutBtn = document.getElementById("logout-btn");
+    if (logoutBtn) {
+        logoutBtn.addEventListener("click", () => {
+            localStorage.removeItem("access_token");
+            window.location.reload();
+        });
+    }
+}
+

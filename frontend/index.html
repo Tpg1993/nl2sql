@@ -22,6 +22,17 @@
                 <h2>Secure Authentication</h2>
                 <p>EHR NL2SQL Agent Portal</p>
             </div>
+            
+            <!-- Auditing Demo Profiles list -->
+            <div class="login-demo-accounts" style="margin-bottom: 20px; padding: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; font-size: 0.75rem;">
+                <span style="font-weight: 600; color: #a78bfa; display: block; margin-bottom: 6px;"><i class="fa-solid fa-users-viewfinder"></i> Compliance Demo Profiles:</span>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 4px; color: var(--text-secondary); line-height: 1.4;">
+                    <div>• <strong>Admin:</strong> admin / admin123 <span style="color:var(--text-muted); font-size:0.7rem;">(Full Database Access)</span></div>
+                    <div>• <strong>Doctor:</strong> doctor / doctor123 <span style="color:var(--text-muted); font-size:0.7rem;">(ABAC matched on Dept 1)</span></div>
+                    <div>• <strong>Researcher:</strong> researcher / researcher123 <span style="color:var(--text-muted); font-size:0.7rem;">(Always Masked/PII-Sanitized)</span></div>
+                </div>
+            </div>
+
             <form id="login-form">
                 <div class="input-group">
                     <label for="login-username"><i class="fa-solid fa-user"></i> Username</label>
@@ -42,6 +53,7 @@
             </form>
         </div>
     </div>
+
 
     <div class="app-container" id="app-container">
         <!-- Sidebar for Database Schema -->
@@ -91,10 +103,20 @@
                         <p>Query Electronic Health Records using Natural Language</p>
                     </div>
                 </div>
-                <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
-                    <i class="fa-solid fa-sun"></i>
-                </button>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div id="user-role-badge" class="role-badge" style="display: none; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(123, 44, 191, 0.15); border: 1px solid rgba(123, 44, 191, 0.3); border-radius: 20px; font-size: 0.75rem; font-weight: 600; color: #d8b4fe;">
+                        <i class="fa-solid fa-user-shield"></i>
+                        <span id="user-role-text">Researcher</span>
+                    </div>
+                    <button id="logout-btn" class="theme-toggle-btn" title="Logout Session" style="display: none;">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                    <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
+                        <i class="fa-solid fa-sun"></i>
+                    </button>
+                </div>
             </header>
+
 
             <!-- Chat Message Area -->
             <section class="messages-container" id="chat-messages">
