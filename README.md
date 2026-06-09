@@ -183,7 +183,7 @@ Simply open the `frontend/index.html` file in any modern web browser (e.g. Chrom
 The core NL2SQL engine is built to be completely domain-independent. If you want to adapt this system to another domain (e.g., E-commerce Sales, CRM, or Finance), you only need to change the configurations and prompt text templates—**no Python code modifications are needed**.
 
 ### Step 1: Update the Semantic Layer Configuration
-Modify [backend/semantic_layer.yaml](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/backend/semantic_layer.yaml) to describe your target database tables, fields, business metrics, and relationships.
+Modify [backend/semantic_layer.yaml](backend/semantic_layer.yaml) to describe your target database tables, fields, business metrics, and relationships.
 * **Example for E-commerce Sales**:
   ```yaml
   entities:
@@ -217,13 +217,13 @@ Modify [backend/semantic_layer.yaml](file:///c:/Users/Tejas/Downloads/APPS/NL2SQ
   ```
 
 ### Step 2: Swap the Persona in the Prompt Templates
-The system loads its AI instructions from the flat text files in [backend/prompts/](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/backend/prompts/). Change the templates to match your domain terminology:
+The system loads its AI instructions from the flat text files in [backend/prompts/](backend/prompts/). Change the templates to match your domain terminology:
 
-1. **Modify the Summarizer Persona** in [summarization.txt](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/backend/prompts/summarization.txt):
+1. **Modify the Summarizer Persona** in [summarization.txt](backend/prompts/summarization.txt):
    * *Old (Clinical)*: `"You are a clinical data summarizer. Write a clean, brief natural language response answering the user's clinical question..."`
    * *New (E-commerce)*: `"You are a retail sales analyst. Write a clean, brief natural language response answering the user's e-commerce sales question..."`
 
-2. **Refine SQL Generation Rules** in [sql_generation.txt](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/backend/prompts/sql_generation.txt):
+2. **Refine SQL Generation Rules** in [sql_generation.txt](backend/prompts/sql_generation.txt):
    * Adjust database engine dialect constraints or business rules. For example:
      * *"Prioritize using PostgreSQL string extraction functions."*
      * *"Never query columns holding hashed passwords or credit cards."*
