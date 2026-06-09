@@ -214,7 +214,7 @@ async function submitQuestion(question) {
         
         const data = await response.json();
         if (data.success) {
-            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries);
+            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries, data.is_expert_matched, data.lineage, data.estimated_cost, question);
         } else {
             appendAssistantError(data.error || "An error occurred during query generation.");
         }
@@ -367,7 +367,7 @@ function highlightSQL(sql) {
 }
 
 // Append Assistant Success Response bubble (SQL, Table, and Tokens)
-function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null, model = "gpt-4o-mini", retries = 0) {
+function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null, model = "gpt-4o-mini", retries = 0, isExpertMatched = false, lineage = {}, estimatedCost = 0.0, questionText = "") {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
@@ -462,7 +462,46 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                         ? `<span class="meta-item retry-badge"><i class="fa-solid fa-arrows-spin"></i> Retries: <strong>${retries}</strong> (Self-Healed)</span>`
                         : `<span class="meta-item"><i class="fa-solid fa-check-double"></i> Retries: <strong>0</strong></span>`
                     }
+                    <span class="meta-item cost-badge">
+                        <i class="fa-solid fa-coins"></i> Cost Units: <strong>${estimatedCost.toFixed(1)}</strong>
+                    </span>
+                    ${isExpertMatched 
+                        ? `<span class="meta-item expert-badge"><i class="fa-solid fa-user-check"></i> Expert Approved</span>` 
+                        : ''
+                    }
                     ${cached ? `<span class="meta-item cache-badge"><i class="fa-solid fa-cloud-bolt"></i> Served from Cache</span>` : ''}
+                </div>
+
+                <!-- Query Lineage Tree details -->
+                <div class="lineage-tree-container">
+                    <details class="lineage-details">
+                        <summary class="lineage-summary">
+                            <span><i class="fa-solid fa-network-wired"></i> View Query Execution Lineage</span>
+                            <i class="fa-solid fa-chevron-down summary-arrow"></i>
+                        </summary>
+                        <div class="lineage-content">
+                            ${renderLineageUI(lineage)}
+                        </div>
+                    </details>
+                </div>
+
+                <!-- Suggest SQL Correction (RLHF Feedback Loop) -->
+                <div class="override-controls-container">
+                    <details class="override-details">
+                        <summary class="override-summary">
+                            <span><i class="fa-solid fa-user-pen"></i> Suggest SQL Correction</span>
+                            <i class="fa-solid fa-chevron-down summary-arrow"></i>
+                        </summary>
+                        <div class="override-form-container" style="padding-top: 10px;">
+                            <textarea class="override-textarea" rows="3" placeholder="Enter corrected SQL query...">${sqlQuery}</textarea>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                                <button class="submit-override-btn" onclick="submitOverride(this, '${encodeURIComponent(questionText)}')">
+                                    <i class="fa-solid fa-paper-plane"></i> Save Correction
+                                </button>
+                                <span class="override-status-msg" style="display: none; font-size: 0.8rem; font-weight: 500;"></span>
+                            </div>
+                        </div>
+                    </details>
                 </div>
                 
                 <!-- Token Usage & Latency Details -->
@@ -699,4 +738,109 @@ if (loginForm) {
             loginError.style.display = "flex";
         }
     });
+}
+
+// =====================================================================
+// LINEAGE TREE & OVERRIDE FORM HELPERS
+// =====================================================================
+function renderLineageUI(lineage) {
+    if (!lineage || !lineage.tables || lineage.tables.length === 0) {
+        return `<div class="empty-lineage">No lineage details available for this query.</div>`;
+    }
+    
+    let html = `<div class="lineage-flow">`;
+    
+    // 1. Tables Section
+    html += `
+        <div class="lineage-section">
+            <span class="section-title"><i class="fa-solid fa-table"></i> Source Tables</span>
+            <div class="lineage-items">
+                ${lineage.tables.map(t => `<span class="lineage-badge table-node">${t}</span>`).join('')}
+            </div>
+        </div>
+    `;
+    
+    // 2. Joins Section
+    if (lineage.joins && lineage.joins.length > 0) {
+        html += `
+            <div class="lineage-section">
+                <span class="section-title"><i class="fa-solid fa-link"></i> Join Conditions</span>
+                <div class="lineage-items">
+                    ${lineage.joins.map(j => `
+                        <div class="lineage-join-item" style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                            <span class="lineage-badge table-node" style="opacity:0.8;">${j.table}</span>
+                            <span class="join-operator"><i class="fa-solid fa-arrow-right-arrow-left"></i></span>
+                            <span class="lineage-badge join-condition">${j.condition}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // 3. Filters Section
+    if (lineage.filters && lineage.filters.length > 0) {
+        html += `
+            <div class="lineage-section">
+                <span class="section-title"><i class="fa-solid fa-filter"></i> Filters Applied</span>
+                <div class="lineage-items">
+                    ${lineage.filters.map(f => `<span class="lineage-badge filter-node">${f}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // 4. Columns Section
+    if (lineage.columns && lineage.columns.length > 0) {
+        html += `
+            <div class="lineage-section">
+                <span class="section-title"><i class="fa-solid fa-list-columns"></i> Columns Projected</span>
+                <div class="lineage-items">
+                    ${lineage.columns.map(c => `<span class="lineage-badge column-node">${c}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    html += `</div>`;
+    return html;
+}
+
+async function submitOverride(btnEl, encodedQuestion) {
+    const question = decodeURIComponent(encodedQuestion);
+    const container = btnEl.closest(".override-form-container");
+    const textarea = container.querySelector(".override-textarea");
+    const corrected_sql = textarea.value.trim();
+    const statusMsg = container.querySelector(".override-status-msg");
+    
+    if (!corrected_sql) return;
+    
+    statusMsg.style.display = "inline";
+    statusMsg.style.color = "var(--text-secondary)";
+    statusMsg.textContent = "Saving override...";
+    
+    try {
+        const response = await fetch(`${API_BASE}/expert-override`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify({ question, corrected_sql })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        statusMsg.style.color = "#4ADE80"; // Bright success green
+        statusMsg.textContent = "Override saved successfully! Run the query again to test.";
+        
+        textarea.disabled = true;
+        btnEl.disabled = true;
+    } catch (err) {
+        console.error("Failed to submit expert override:", err);
+        statusMsg.style.color = "#FCA5A5"; // error red
+        statusMsg.textContent = "Failed to save override. Verify authorization.";
+    }
 }

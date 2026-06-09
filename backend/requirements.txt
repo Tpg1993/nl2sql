@@ -10,3 +10,4 @@ databricks-sqlalchemy==2.0.9
 redis==5.0.4
 PyJWT==2.8.0
 slowapi==0.1.9
+PyYAML==6.0.1

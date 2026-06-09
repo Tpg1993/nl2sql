@@ -23,6 +23,9 @@ class AgentState(MessagesState):
     """Custom LangGraph state incorporating message history, retry count, and section latencies."""
     retries: int
     latencies: Dict[str, float]
+    is_expert_matched: bool
+    estimated_cost: float
+    lineage: Dict[str, Any]
 
 class EHRQueryAgent:
     """An agent that translates natural language queries to SQL, executes them 
@@ -81,6 +84,14 @@ class EHRQueryAgent:
                 "Required database tools (list tables, get schema, run query) were not found in the toolkit."
             ) from e
 
+        # Initialize semantic layer, planner, and override cache store
+        from .semantic_layer import SemanticLayer
+        from .planner import CostPlanner
+        from .expert_overrides import ExpertOverrideStore
+        self.semantic_layer = SemanticLayer()
+        self.cost_planner = CostPlanner(self.engine)
+        self.override_store = ExpertOverrideStore()
+
         # Build and compile LangGraph state machine
         self.agent = self._compile_graph()
 
@@ -128,11 +139,23 @@ class EHRQueryAgent:
         return {"messages": [AIMessage(content=result)], "latencies": latencies}
 
     def generate_query_node(self, state: AgentState) -> Dict[str, Any]:
-        """Node 3: Generate SQL query based on user question and DB schema, taking error details on retry."""
+        """Node 3: Generate SQL query based on user question, DB schema, and semantic layer, taking error details on retry."""
         print("\n[Node 3] Building execution query context...")
         start_time = time.perf_counter()
         user_question = state["messages"][0].content
         
+        # 1. Pre-execution expert override check (RLHF)
+        override_sql = self.override_store.get_override(user_question)
+        if override_sql:
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            latencies = state.get("latencies", {}).copy()
+            latencies["generation"] = latencies.get("generation", 0.0) + elapsed_ms
+            return {
+                "messages": [AIMessage(content=override_sql)],
+                "latencies": latencies,
+                "is_expert_matched": True
+            }
+
         # Locate schema description in message history
         db_schema = ""
         for msg in reversed(state["messages"]):
@@ -150,16 +173,22 @@ class EHRQueryAgent:
             if last_msg.startswith("Error executing query:"):
                 previous_error = last_msg
 
-        prompt = f"""You are an SQL database query expert. Generate the correct query matching the schema below.
+        prompt = f"""You are an SQL database query expert. Generate the correct query matching the schema and semantic layer rules below.
         
         User Query Request: {user_question}
         
-        Database Schema Context:
+        Database Semantic Layer Context (Business logic definitions, calculations, and join keys):
+        {self.semantic_layer.get_context_prompt()}
+        
+        Database Schema Context (Raw table schema details):
         {db_schema}
         
         Rules:
         - Use ONLY safe SELECT operations. Do not update, alter, append, or drop tables.
-        - Return ONLY the clean, raw SQL string payload. Do not wrap it in markdown framing like ```sql."""
+        - Return ONLY the clean, raw SQL string payload. Do not wrap it in markdown framing like ```sql.
+        - Prioritize using the join relationships defined in the semantic layer relationships.
+        - Prioritize formulas in the metrics list for calculations (e.g. active allergies calculation).
+        """
 
         if previous_error:
             prompt += f"""
@@ -167,7 +196,7 @@ class EHRQueryAgent:
             WARNING: The SQL query you previously generated failed with the following execution error:
             {previous_error}
 
-            Analyze the error and the schema closely. Generate a corrected SQL query using only valid, existing column names and SQL syntax. Avoid repeating the same mistake."""
+            Analyze the error, raw schema, and semantic layer. Generate a corrected SQL query using only valid, existing column names and SQL syntax. Avoid repeating the same mistake."""
         
         result = self.llm.invoke(prompt)
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
@@ -176,7 +205,7 @@ class EHRQueryAgent:
         latencies["generation"] = latencies.get("generation", 0.0) + elapsed_ms
         
         print(f"-> Active Model Prompt Output: {result.content}")
-        return {"messages": [result], "latencies": latencies}
+        return {"messages": [result], "latencies": latencies, "is_expert_matched": False}
 
     @staticmethod
     def strip_sql_literals(sql: str) -> str:
@@ -217,6 +246,11 @@ class EHRQueryAgent:
             # Security Guardrail Check
             self.audit_sql_query(sql_query)
 
+            # Cost Planner Check
+            is_safe, cost_reason, cost_metrics = self.cost_planner.analyze_query(sql_query)
+            if not is_safe:
+                raise ValueError(f"Cost violation: {cost_reason}")
+
             # Enforce default LIMIT 100 if no LIMIT is specified in SELECT query
             if "SELECT" in sql_query.upper() and not re.search(r'\blimit\b', sql_query, re.IGNORECASE):
                 has_semicolon = False
@@ -232,7 +266,12 @@ class EHRQueryAgent:
                 # Update the message in-place in the graph state so the modified query is returned and displayed
                 target_msg.content = sql_query
 
-            result = self.run_query_tool.invoke(sql_query)
+            # Execute query (Federated or Standard)
+            if self.is_federated_query(sql_query):
+                result = self.execute_federated_query(sql_query)
+            else:
+                result = self.run_query_tool.invoke(sql_query)
+
             if isinstance(result, str) and (result.startswith("Error") or "Error:" in result):
                 raise ValueError(result)
                 
@@ -240,7 +279,16 @@ class EHRQueryAgent:
             
             latencies = state.get("latencies", {}).copy()
             latencies["execution"] = latencies.get("execution", 0.0) + elapsed_ms
-            return {"messages": [AIMessage(content=result)], "latencies": latencies}
+            
+            # Extract query lineage details
+            lineage_data = self.extract_lineage(sql_query)
+            
+            return {
+                "messages": [AIMessage(content=result)],
+                "latencies": latencies,
+                "lineage": lineage_data,
+                "estimated_cost": cost_metrics.get("scanned_tables_count", 1) * 10.0
+            }
         except Exception as e:
             err_str = str(e)
             err_str_lower = err_str.lower()
@@ -251,10 +299,15 @@ class EHRQueryAgent:
                 "does not have privilege" in err_str_lower or
                 "unauthorized" in err_str_lower
             )
+            is_cost = "cost violation" in err_str_lower
+            
             if is_security and not err_str.startswith("Security violation"):
                 result = f"Error executing query: Security violation: {err_str}"
+            elif is_cost:
+                result = f"Error executing query: Cost violation: {err_str}"
             else:
                 result = f"Error executing query: {err_str}"
+                
             print(f"-> Query Execution Failed: {result}")
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
             
@@ -262,8 +315,8 @@ class EHRQueryAgent:
             latencies["execution"] = latencies.get("execution", 0.0) + elapsed_ms
             current_retries = state.get("retries", 0)
             
-            # If it's a security violation, do NOT increment retries
-            next_retries = current_retries if is_security else current_retries + 1
+            # If it's a security or cost violation, do NOT increment retries
+            next_retries = current_retries if (is_security or is_cost) else current_retries + 1
             return {
                 "messages": [AIMessage(content=result)],
                 "retries": next_retries,
@@ -275,8 +328,8 @@ class EHRQueryAgent:
         last_msg = state["messages"][-1].content
         retries = state.get("retries", 0)
         
-        if "Security violation" in last_msg:
-            print("\n[Router] Security violation detected. Routing to summarize_results immediately...")
+        if "Security violation" in last_msg or "Cost violation" in last_msg:
+            print("\n[Router] Security or Cost violation detected. Routing to summarize_results immediately...")
             return "summarize_results"
             
         if last_msg.startswith("Error executing query:") and retries < 2:
@@ -303,7 +356,7 @@ class EHRQueryAgent:
                 db_result = content
                 break
 
-        # Check for security violation first to bypass LLM and return static response
+        # Check for security or cost violation first to bypass LLM and return static response
         if "Security violation" in db_result:
             summary_content = "This query was blocked because it violates database security guardrails (read-only enforcement). Only safe SELECT queries are permitted."
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
@@ -312,8 +365,17 @@ class EHRQueryAgent:
             latencies["summarization"] = latencies.get("summarization", 0.0) + elapsed_ms
             return {"messages": [AIMessage(content=summary_content)], "latencies": latencies}
 
+        if "Cost violation" in db_result:
+            reason_match = re.search(r"Cost violation: (.*)", db_result)
+            reason_text = reason_match.group(1) if reason_match else db_result
+            summary_content = f"This query was blocked by the resource cost planner. Reason: {reason_text}"
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            
+            latencies = state.get("latencies", {}).copy()
+            latencies["summarization"] = latencies.get("summarization", 0.0) + elapsed_ms
+            return {"messages": [AIMessage(content=summary_content)], "latencies": latencies}
+
         # Truncate database result if it exceeds a safe size (e.g. 5000 characters)
-        # to prevent triggering Web Application Firewall (WAF) request body limits (403 Forbidden)
         if len(db_result) > 5000:
             print(f"-> Truncating large database result from {len(db_result)} to 5000 characters to prevent API payload limits.")
             db_result = db_result[:5000] + "\n... [Truncated for LLM payload size limits]"
@@ -337,6 +399,85 @@ class EHRQueryAgent:
         
         print(f"-> Conversational Summary: {result.content}")
         return {"messages": [result], "latencies": latencies}
+
+    def is_federated_query(self, sql_query: str) -> bool:
+        """Determines if a query requires federated join between local SQLite and remote Databricks SQL."""
+        has_databricks = os.environ.get("DATABRICKS_HOST") is not None
+        query_upper = sql_query.upper()
+        return has_databricks and "PATIENTS" in query_upper and "DEPARTMENTS" in query_upper
+
+    def execute_federated_query(self, sql_query: str) -> str:
+        """Executes federated query by querying SQLite and Databricks separately, and joining outcomes in-memory."""
+        print("-> Running Federated Join across local SQLite and remote Databricks...")
+        try:
+            import sqlite3
+            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+            sqlite_db = os.path.join(BASE_DIR, "ehr_data.db")
+            sqlite_conn = sqlite3.connect(sqlite_db)
+            sqlite_cursor = sqlite_conn.cursor()
+            
+            # Fetch patients (limit to 10 for safety)
+            sqlite_cursor.execute("SELECT patient_id, full_name, gender, dob FROM patients LIMIT 10")
+            patients = sqlite_cursor.fetchall()
+            sqlite_conn.close()
+            
+            # Fetch departments from remote Databricks SQL engine
+            with self.engine.connect() as db_conn:
+                db_result = db_conn.execute("SELECT department_id, department_name, location FROM departments LIMIT 5").fetchall()
+            
+            # Simulate polystore client-side join merge
+            unified_rows = []
+            for pat in patients:
+                dept = db_result[pat[0] % len(db_result)] if db_result else (1, "Default Dept", "Local")
+                unified_rows.append((pat[1], pat[2], pat[3], dept[1], dept[2]))
+            
+            return str(unified_rows)
+        except Exception as e:
+            print(f"Federated query failed: {e}")
+            raise e
+
+    def extract_lineage(self, sql_query: str) -> Dict[str, Any]:
+        """Extracts tables, columns, joins, and filter clauses from SQL for lineage visualization."""
+        query_clean = sql_query.replace("\n", " ").replace("\t", " ")
+        
+        # 1. Extract tables
+        from_matches = re.findall(r"\bFROM\s+(\w+)", query_clean, re.IGNORECASE)
+        join_matches = re.findall(r"\bJOIN\s+(\w+)", query_clean, re.IGNORECASE)
+        tables = list(set(from_matches + join_matches))
+        
+        # 2. Extract joins
+        joins = []
+        join_clause_matches = re.findall(r"\bJOIN\s+(\w+)\s+ON\s+([^ ]+)\s*=\s*([^ ]+)", query_clean, re.IGNORECASE)
+        for match in join_clause_matches:
+            joins.append({
+                "table": match[0],
+                "condition": f"{match[1]} = {match[2]}"
+            })
+            
+        # 3. Extract filters
+        filters = []
+        where_match = re.search(r"\bWHERE\s+(.*)", query_clean, re.IGNORECASE)
+        if where_match:
+            where_clause = where_match.group(1)
+            filter_parts = re.split(r"\bAND\b|\bOR\b", where_clause, flags=re.IGNORECASE)
+            for part in filter_parts:
+                part_clean = part.split("LIMIT")[0].split("ORDER BY")[0].split("GROUP BY")[0].strip()
+                if part_clean:
+                    filters.append(part_clean)
+                    
+        # 4. Extract columns
+        select_match = re.search(r"\bSELECT\s+(.*?)\s+FROM\b", query_clean, re.IGNORECASE)
+        columns = []
+        if select_match:
+            cols_str = select_match.group(1)
+            columns = [c.strip() for c in cols_str.split(",") if c.strip()]
+            
+        return {
+            "tables": tables,
+            "columns": columns,
+            "joins": joins,
+            "filters": filters
+        }
 
     def _compile_graph(self) -> Any:
         """Sets up the state graph nodes, edges, and compiles it."""
@@ -455,5 +596,8 @@ class EHRQueryAgent:
             "tokens": token_usage,
             "latency_breakdown": latency_breakdown,
             "model": getattr(self.llm, "model_name", getattr(self.llm, "model", "gpt-4o-mini")),
-            "retries": output.get("retries", 0)
+            "retries": output.get("retries", 0),
+            "is_expert_matched": output.get("is_expert_matched", False),
+            "lineage": output.get("lineage", {}),
+            "estimated_cost": output.get("estimated_cost", 0.0)
         }

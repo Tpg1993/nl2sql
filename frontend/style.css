@@ -1429,4 +1429,254 @@ body[data-theme="light"] .input-group input:focus {
     box-shadow: 0 0 10px rgba(123, 44, 191, 0.15);
 }
 
+/* =====================================================================
+   ENTERPRISE SUITE STYLING (v7)
+   ===================================================================== */
+.query-meta-bar .cost-badge {
+    background-color: rgba(234, 179, 8, 0.1);
+    border: 1px solid rgba(234, 179, 8, 0.25);
+    color: #FACC15;
+}
+
+body[data-theme="light"] .query-meta-bar .cost-badge {
+    background-color: rgba(234, 179, 8, 0.08);
+    border: 1px solid rgba(234, 179, 8, 0.2);
+    color: #CA8A04;
+}
+
+.query-meta-bar .expert-badge {
+    background-color: rgba(74, 222, 128, 0.12);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    color: #4ADE80;
+}
+
+body[data-theme="light"] .query-meta-bar .expert-badge {
+    background-color: rgba(22, 163, 74, 0.08);
+    border: 1px solid rgba(22, 163, 74, 0.2);
+    color: #16A34A;
+}
+
+/* Lineage Details & Trees */
+.lineage-tree-container,
+.override-controls-container {
+    margin-top: 15px;
+    background: rgba(5, 7, 15, 0.3);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+    padding: 10px 14px;
+    transition: var(--transition-smooth);
+}
+
+body[data-theme="light"] .lineage-tree-container,
+body[data-theme="light"] .override-controls-container {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.lineage-details,
+.override-details {
+    width: 100%;
+}
+
+.lineage-summary,
+.override-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    list-style: none;
+    user-select: none;
+}
+
+.lineage-summary::-webkit-details-marker,
+.override-summary::-webkit-details-marker {
+    display: none;
+}
+
+.lineage-summary span,
+.override-summary span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lineage-summary span i,
+.override-summary span i {
+    color: var(--accent-secondary);
+}
+
+.lineage-details[open] .summary-arrow,
+.override-details[open] .summary-arrow {
+    transform: rotate(180deg);
+}
+
+.lineage-content,
+.override-form-container {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 10px;
+}
+
+body[data-theme="light"] .lineage-content,
+body[data-theme="light"] .override-form-container {
+    border-top: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+/* Lineage Flow Layout */
+.lineage-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.lineage-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.lineage-section .section-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.lineage-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.lineage-badge {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+}
+
+.lineage-badge.table-node {
+    background-color: rgba(123, 44, 191, 0.12);
+    border: 1px solid rgba(123, 44, 191, 0.25);
+    color: #D8B4FE;
+}
+
+body[data-theme="light"] .lineage-badge.table-node {
+    background-color: rgba(123, 44, 191, 0.08);
+    border: 1px solid rgba(123, 44, 191, 0.2);
+    color: var(--accent-primary);
+}
+
+.lineage-badge.join-condition {
+    background-color: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    color: #C7D2FE;
+    font-family: 'Fira Code', monospace;
+}
+
+body[data-theme="light"] .lineage-badge.join-condition {
+    background-color: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    color: #4F46E5;
+}
+
+.lineage-badge.filter-node {
+    background-color: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #FCA5A5;
+    font-family: 'Fira Code', monospace;
+}
+
+body[data-theme="light"] .lineage-badge.filter-node {
+    background-color: rgba(239, 68, 68, 0.06);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    color: #DC2626;
+}
+
+.lineage-badge.column-node {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    font-family: 'Fira Code', monospace;
+}
+
+body[data-theme="light"] .lineage-badge.column-node {
+    background-color: rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    color: #0F172A;
+}
+
+.join-operator {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* Override Textarea and Form Controls */
+.override-textarea {
+    width: 100%;
+    background: rgba(5, 7, 15, 0.4);
+    border: 1px solid var(--border-glass);
+    border-radius: 8px;
+    color: #FFF;
+    padding: 10px;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.8rem;
+    outline: none;
+    resize: vertical;
+    transition: var(--transition-smooth);
+}
+
+body[data-theme="light"] .override-textarea {
+    background: rgba(255, 255, 255, 0.8);
+    color: #0F172A;
+}
+
+.override-textarea:focus {
+    border-color: var(--accent-secondary);
+}
+
+.submit-override-btn {
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+    border: none;
+    border-radius: 6px;
+    color: #FFF;
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition-smooth);
+}
+
+.submit-override-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px var(--accent-glow);
+}
+
+.submit-override-btn:disabled {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+body[data-theme="light"] .submit-override-btn:disabled {
+    background: rgba(15, 23, 42, 0.08);
+}
+
 

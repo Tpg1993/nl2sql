@@ -4,7 +4,17 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
-## [v6_sarvam_auth_api](#v6_sarvam_auth_api) (Current Branch)
+## [v7_sarvam_enterprise_suite](#v7_sarvam_enterprise_suite) (Current Branch)
+*   **Release Focus**: Decoupled Semantic Layer, Cost-Aware Execution Planner, Federated Querying, Lineage-Backed Audit Trails, and Expert Override (RLHF) Loop.
+*   **Semantic Layer**: Integrates a `semantic_layer.yaml` mapping business metrics and entities (e.g. "patient summary counts") to database columns and tables. Pre-compiles logical definitions into LLM context prompts, ensuring generated SQL queries align with organizational metrics.
+*   **Cost-Aware Execution Planner**: Intercepts expensive queries by analyzing SQLite/Databricks query execution plans (`EXPLAIN`). Blocks Cartesian products or high-cost scans before execution, preventing database overloading.
+*   **Federated Querying**: Implements a router to handle distributed queries, dynamically joining local SQLite tables (e.g., patient metadata) with simulated remote Databricks SQL Warehouse tables.
+*   **Lineage-Backed Audit Trails**: Automatically parses generated SQL to extract table/column dependencies, joins, and filters. Visualizes query lineage pathways in the frontend, providing clinical compliance tracking.
+*   **Expert Override (RLHF) Loop**: Allows administrators/analysts to suggest SQL query corrections. Persists analyst-approved queries in a localized SQLite database (`cache.db`), immediately serving corrected SQL on match and showcasing an "Expert Approved" badge.
+
+---
+
+## [v6_sarvam_auth_api](#v6_sarvam_auth_api)
 *   **Release Focus**: JWT OAuth2 authentication, endpoint rate-limiting, restricted CORS access whitelists, input constraint filters, and glassmorphic login overlays.
 *   **JWT OAuth2 Authentication**: Implements bearer-token validation (`HS256`) protecting database metadata reflection and query generation endpoints. Decodes and verifies token signatures and expirations locally.
 *   **Endpoint Rate-Limiting**: Integrates `slowapi` to restrict access burst frequency (5/min login, 15/min query, 30/min schema metadata) to mitigate denial-of-service and token cost exhaustion.

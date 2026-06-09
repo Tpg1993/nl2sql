@@ -69,6 +69,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class OverrideRequest(BaseModel):
+    question: str
+    corrected_sql: str
+
+
 @app.post("/api/auth/token")
 @limiter.limit("5/minute")
 def login(request: Request, login_req: LoginRequest):
@@ -88,6 +93,27 @@ def login(request: Request, login_req: LoginRequest):
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
+@app.post("/api/expert-override")
+def add_expert_override(req: OverrideRequest, current_user: str = Depends(get_current_user)):
+    """Allows administrators/experts to override or correct a query translation."""
+    if not agent:
+        raise HTTPException(status_code=500, detail="Database agent is not initialized.")
+    
+    if not req.question.strip() or not req.corrected_sql.strip():
+        raise HTTPException(status_code=400, detail="Question and corrected SQL cannot be empty.")
+    
+    try:
+        agent.override_store.set_override(req.question, req.corrected_sql)
+        # Purge any existing query cache for this question so it picks up the override
+        if cache_manager:
+            import hashlib
+            q_hash = hashlib.sha256(req.question.lower().strip().encode("utf-8")).hexdigest()
+            cache_manager.delete(q_hash)
+        return {"success": True, "message": "Expert query override recorded."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/metadata")
@@ -165,6 +191,9 @@ def run_query(request: Request, query_req: QueryRequest, current_user: str = Dep
                 },
                 "model": model,
                 "retries": retries,
+                "is_expert_matched": False,
+                "lineage": {},
+                "estimated_cost": 0.0,
                 "error": None
             }
 
@@ -216,6 +245,9 @@ def run_query(request: Request, query_req: QueryRequest, current_user: str = Dep
             "latency_breakdown": res.get("latency_breakdown", {}),
             "model": res.get("model", "gpt-4o-mini"),
             "retries": res.get("retries", 0),
+            "is_expert_matched": res.get("is_expert_matched", False),
+            "lineage": res.get("lineage", {}),
+            "estimated_cost": res.get("estimated_cost", 0.0),
             "error": error_message
         }
     except Exception as e:
@@ -232,5 +264,8 @@ def run_query(request: Request, query_req: QueryRequest, current_user: str = Dep
                 "summarization": 0.0
             },
             "model": "Unknown Model",
-            "retries": 0
+            "retries": 0,
+            "is_expert_matched": False,
+            "lineage": {},
+            "estimated_cost": 0.0
         }
