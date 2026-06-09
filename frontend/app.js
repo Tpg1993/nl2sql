@@ -13,8 +13,10 @@ const queryForm = document.getElementById("query-form");
 const userInput = document.getElementById("user-input");
 const sendButton = document.getElementById("send-button");
 
-// On Load: Check auth and fetch schema metadata
+// On Load: Check auth, fetch schema metadata, and initialize collapsible sidebar
 window.addEventListener("DOMContentLoaded", () => {
+    initSidebarCollapse();
+    
     const token = localStorage.getItem("access_token");
     if (!token) {
         document.getElementById("login-overlay").style.display = "flex";
@@ -843,4 +845,38 @@ async function submitOverride(btnEl, encodedQuestion) {
         statusMsg.style.color = "#FCA5A5"; // error red
         statusMsg.textContent = "Failed to save override. Verify authorization.";
     }
+}
+
+// =====================================================================
+// COLLAPSIBLE SIDEBAR LOGIC
+// =====================================================================
+const appContainer = document.getElementById("app-container");
+const toggleSidebarCollapseBtn = document.getElementById("toggle-sidebar-collapse");
+const toggleSidebarExpandBtn = document.getElementById("toggle-sidebar-expand");
+
+function initSidebarCollapse() {
+    const sidebarState = localStorage.getItem("sidebar_state") || "expanded";
+    if (sidebarState === "collapsed") {
+        if (appContainer) appContainer.classList.add("sidebar-collapsed");
+        if (toggleSidebarExpandBtn) toggleSidebarExpandBtn.style.display = "inline-flex";
+    } else {
+        if (appContainer) appContainer.classList.remove("sidebar-collapsed");
+        if (toggleSidebarExpandBtn) toggleSidebarExpandBtn.style.display = "none";
+    }
+}
+
+if (toggleSidebarCollapseBtn) {
+    toggleSidebarCollapseBtn.addEventListener("click", () => {
+        if (appContainer) appContainer.classList.add("sidebar-collapsed");
+        if (toggleSidebarExpandBtn) toggleSidebarExpandBtn.style.display = "inline-flex";
+        localStorage.setItem("sidebar_state", "collapsed");
+    });
+}
+
+if (toggleSidebarExpandBtn) {
+    toggleSidebarExpandBtn.addEventListener("click", () => {
+        if (appContainer) appContainer.classList.remove("sidebar-collapsed");
+        if (toggleSidebarExpandBtn) toggleSidebarExpandBtn.style.display = "none";
+        localStorage.setItem("sidebar_state", "expanded");
+    });
 }

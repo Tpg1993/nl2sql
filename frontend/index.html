@@ -43,7 +43,7 @@
         </div>
     </div>
 
-    <div class="app-container">
+    <div class="app-container" id="app-container">
         <!-- Sidebar for Database Schema -->
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -51,9 +51,14 @@
                     <i class="fa-solid fa-database database-icon"></i>
                     <span>EHR Database</span>
                 </div>
-                <div class="status-indicator" id="status-badge">
-                    <span class="status-dot"></span>
-                    <span id="status-text">Connecting...</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="status-indicator" id="status-badge">
+                        <span class="status-dot"></span>
+                        <span id="status-text">Connecting...</span>
+                    </div>
+                    <button id="toggle-sidebar-collapse" class="sidebar-toggle-btn" title="Collapse Sidebar">
+                        <i class="fa-solid fa-angles-left"></i>
+                    </button>
                 </div>
             </div>
             
@@ -77,9 +82,14 @@
         <!-- Main Chat Area -->
         <main class="chat-dashboard">
             <header class="main-header">
-                <div class="header-title">
-                    <h1>NL2SQL Agentic Interface</h1>
-                    <p>Query Electronic Health Records using Natural Language</p>
+                <div class="header-left-wrapper">
+                    <button id="toggle-sidebar-expand" class="sidebar-toggle-btn expand-only" title="Expand Sidebar" style="display: none; margin-right: 8px;">
+                        <i class="fa-solid fa-angles-right"></i>
+                    </button>
+                    <div class="header-title">
+                        <h1>NL2SQL Agentic Interface</h1>
+                        <p>Query Electronic Health Records using Natural Language</p>
+                    </div>
                 </div>
                 <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
                     <i class="fa-solid fa-sun"></i>
