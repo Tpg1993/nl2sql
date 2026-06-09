@@ -14,6 +14,35 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Login Modal Overlay -->
+    <div class="login-modal-overlay" id="login-overlay" style="display: none;">
+        <div class="login-card">
+            <div class="login-header">
+                <i class="fa-solid fa-shield-halved login-shield"></i>
+                <h2>Secure Authentication</h2>
+                <p>EHR NL2SQL Agent Portal</p>
+            </div>
+            <form id="login-form">
+                <div class="input-group">
+                    <label for="login-username"><i class="fa-solid fa-user"></i> Username</label>
+                    <input type="text" id="login-username" placeholder="Enter username" required autocomplete="username">
+                </div>
+                <div class="input-group">
+                    <label for="login-password"><i class="fa-solid fa-lock"></i> Password</label>
+                    <input type="password" id="login-password" placeholder="Enter password" required autocomplete="current-password">
+                </div>
+                <div id="login-error" class="login-error-msg" style="display: none;">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span id="login-error-text">Invalid username or password.</span>
+                </div>
+                <button type="submit" class="login-btn" id="login-submit-btn">
+                    <span>Authenticate</span>
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
     <div class="app-container">
         <!-- Sidebar for Database Schema -->
         <aside class="sidebar">

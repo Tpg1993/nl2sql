@@ -4,12 +4,22 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
-## [v5_sarvam_sql_guardrails](#v5_sarvam_sql_guardrails) (Current Branch)
-*   **Release Focus**: SQL security guardrails, read-only engine hardening, query limit constraints, and safe error handling.
-*   **SQL Safety Auditor**: Introduces a regex-based pre-execution audit block (`audit_sql_query`) to intercept write, drop, or schema alteration keywords (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, etc.) outside SQL string literals.
+## [v6_sarvam_auth_api](#v6_sarvam_auth_api) (Current Branch)
+*   **Release Focus**: JWT OAuth2 authentication, endpoint rate-limiting, restricted CORS access whitelists, input constraint filters, and glassmorphic login overlays.
+*   **JWT OAuth2 Authentication**: Implements bearer-token validation (`HS256`) protecting database metadata reflection and query generation endpoints. Decodes and verifies token signatures and expirations locally.
+*   **Endpoint Rate-Limiting**: Integrates `slowapi` to restrict access burst frequency (5/min login, 15/min query, 30/min schema metadata) to mitigate denial-of-service and token cost exhaustion.
+*   **Restricted CORS & Whitelisting**: Transitioned backend CORS configuration from global wildcard (`*`) to comma-separated domains loaded via `ALLOWED_ORIGINS` in `.env`.
+*   **Query Input Constraints**: Hardens the query handler by validating and rejecting questions exceeding 500 characters to protect LLM contexts.
+*   **Glassmorphic Login UX**: Implements client-side session redirection logic and a password entry card overlay fully integrated into the existing dark/light theme switchers.
+
+---
+
+## [v5_sarvam_sql_guardrails](#v5_sarvam_sql_guardrails)
+*   **Release Focus**: SQL security guardrails, read-only engine hardening, query limit constraints, safe error handling, and unified Databricks/SQLite compatibility.
+*   **SQL Safety Auditor**: Introduces a regex-based pre-execution audit block (`audit_sql_query`) to intercept write, drop, or schema alteration keywords (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, etc.) outside SQL string literals. Applicable to both SQLite and Databricks.
 *   **Read-Only Engine Hardening**: Configures SQLite database connections using URI parameters (`mode=ro` with `uri=True`) to block modifications at the database engine level, raising engine-level `OperationalError` upon write attempts.
-*   **Default SELECT Query Limits**: Automatically wraps `SELECT` queries missing `LIMIT` constraints with a default `LIMIT 100` boundary to protect server memory and browser rendering performance.
-*   **Safe Error Handling & Graph Routing**: Catches security exceptions and SQLite engine write errors within the graph, bypasses LLM summarization, and instantly routes to returning a structured static security warning.
+*   **Default SELECT Query Limits**: Automatically wraps `SELECT` queries missing `LIMIT` constraints with a default `LIMIT 100` boundary to protect server memory and browser rendering performance. Fully compatible with Databricks SQL.
+*   **Safe Error Handling & Graph Routing**: Catches security exceptions, SQLite engine write errors, and Databricks database permission violations (`Permission denied`, `does not have privilege`, `UNAUTHORIZED`) within the graph, bypasses LLM summarization, and instantly routes to returning a structured static security warning.
 
 ---
 

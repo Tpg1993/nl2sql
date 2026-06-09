@@ -13,15 +13,38 @@ const queryForm = document.getElementById("query-form");
 const userInput = document.getElementById("user-input");
 const sendButton = document.getElementById("send-button");
 
-// On Load: Fetch schema metadata
+// On Load: Check auth and fetch schema metadata
 window.addEventListener("DOMContentLoaded", () => {
-    fetchSchemaMetadata();
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+        document.getElementById("login-overlay").style.display = "flex";
+    } else {
+        fetchSchemaMetadata();
+    }
 });
+
+// Helper to compile authorization headers
+function getAuthHeaders() {
+    const token = localStorage.getItem("access_token");
+    const headers = {};
+    if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+}
 
 // Fetch Schema Details from FastAPI
 async function fetchSchemaMetadata() {
     try {
-        const response = await fetch(`${API_BASE}/metadata`);
+        const response = await fetch(`${API_BASE}/metadata`, {
+            headers: getAuthHeaders()
+        });
+        if (response.status === 401) {
+            localStorage.removeItem("access_token");
+            document.getElementById("login-overlay").style.display = "flex";
+            showSchemaError("Session expired or unauthorized. Please authenticate.");
+            return;
+        }
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -167,15 +190,23 @@ async function submitQuestion(question) {
     scrollToBottom();
     
     try {
+        const headers = getAuthHeaders();
+        headers["Content-Type"] = "application/json";
+        
         const response = await fetch(`${API_BASE}/query`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: headers,
             body: JSON.stringify({ question })
         });
         
         removeTypingIndicator(loaderId);
+        
+        if (response.status === 401) {
+            localStorage.removeItem("access_token");
+            document.getElementById("login-overlay").style.display = "flex";
+            appendAssistantError("Your session has expired. Please authenticate using the login panel.");
+            return;
+        }
         
         if (!response.ok) {
             throw new Error(`Server returned HTTP ${response.status}`);
@@ -619,4 +650,53 @@ function updateThemeIcon(theme) {
     } else {
         icon.className = "fa-solid fa-sun";
     }
+}
+
+// =====================================================================
+// SECURE LOGIN FORM HANDLER
+// =====================================================================
+const loginOverlay = document.getElementById("login-overlay");
+const loginForm = document.getElementById("login-form");
+const loginUsernameInput = document.getElementById("login-username");
+const loginPasswordInput = document.getElementById("login-password");
+const loginError = document.getElementById("login-error");
+const loginErrorText = document.getElementById("login-error-text");
+
+if (loginForm) {
+    loginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const username = loginUsernameInput.value.trim();
+        const password = loginPasswordInput.value.trim();
+        
+        // Clear previous errors
+        loginError.style.display = "none";
+        
+        try {
+            const response = await fetch(`${API_BASE}/auth/token`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password })
+            });
+            
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || "Incorrect username or password.");
+            }
+            
+            const data = await response.json();
+            localStorage.setItem("access_token", data.access_token);
+            
+            // Hide overlay and reset inputs
+            loginOverlay.style.display = "none";
+            loginUsernameInput.value = "";
+            loginPasswordInput.value = "";
+            
+            // Re-fetch schema metadata now that we are authorized
+            fetchSchemaMetadata();
+        } catch (error) {
+            console.error("Login failed:", error);
+            loginErrorText.textContent = error.message;
+            loginError.style.display = "flex";
+        }
+    });
 }

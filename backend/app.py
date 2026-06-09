@@ -1,12 +1,31 @@
 import ast
+import os
 import time
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import inspect
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from .agent import EHRQueryAgent
 from .cache import get_cache_manager
+from .auth import get_current_user, verify_password, create_access_token
+
+# Load environment configuration
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD_PLAIN = os.environ.get("ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH")
+
+if not ADMIN_PASSWORD_HASH:
+    from .auth import get_password_hash
+    ADMIN_PASSWORD_HASH = get_password_hash(ADMIN_PASSWORD_PLAIN)
+
+ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="EHR SQL Agent API",
@@ -14,14 +33,17 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for all origins (important for local development & frontend clients)
+# Enable CORS (restricted to ALLOWED_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Initialize agent
 try:
@@ -42,8 +64,35 @@ class QueryRequest(BaseModel):
     question: str
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/auth/token")
+@limiter.limit("5/minute")
+def login(request: Request, login_req: LoginRequest):
+    """Authenticate credentials and return a signed JWT token."""
+    print(f"\n[Auth Debug] Attempt: username='{login_req.username}', password='{login_req.password}'")
+    print(f"[Auth Debug] Expected: username='{ADMIN_USERNAME}', hash='{ADMIN_PASSWORD_HASH}'")
+    match = verify_password(login_req.password, ADMIN_PASSWORD_HASH)
+    print(f"[Auth Debug] Match result: {match}")
+    if login_req.username != ADMIN_USERNAME or not match:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(data={"sub": login_req.username})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+
 @app.get("/api/metadata")
-def get_metadata():
+@limiter.limit("30/minute")
+def get_metadata(request: Request, current_user: str = Depends(get_current_user)):
     """Retrieve database metadata (tables and columns) for UI sidebar."""
     if not agent:
         raise HTTPException(status_code=500, detail="Database agent is not initialized.")
@@ -67,19 +116,27 @@ def get_metadata():
 
 
 @app.post("/api/query")
-def run_query(request: QueryRequest):
+@limiter.limit("15/minute")
+def run_query(request: Request, query_req: QueryRequest, current_user: str = Depends(get_current_user)):
     """Query the agent with a natural language prompt, returning execution latency and conversational response summary."""
     if not agent:
         raise HTTPException(status_code=500, detail="Database agent is not initialized.")
     
-    if not request.question.strip():
+    if not query_req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    # Enforce input length constraint to mitigate Prompt Injection / Denial of Service
+    if len(query_req.question.strip()) > 500:
+        raise HTTPException(
+            status_code=400, 
+            detail="Question exceeds maximum permitted length of 500 characters."
+        )
 
     start_time = time.perf_counter()
 
     # 1. Attempt to serve from Cache
     if cache_manager:
-        cached = cache_manager.get(request.question)
+        cached = cache_manager.get(query_req.question)
         if cached:
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
             cached_tokens = cached.get("tokens") or {}
@@ -113,7 +170,7 @@ def run_query(request: QueryRequest):
 
     # 2. Run agent if cache miss
     try:
-        res = agent.query_detailed(request.question)
+        res = agent.query_detailed(query_req.question)
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
         raw_result = res["result"]
         conversational_summary = res.get("summary", "")
@@ -141,7 +198,7 @@ def run_query(request: QueryRequest):
             cached_tokens_payload["retries"] = res.get("retries", 0)
             
             cache_manager.set(
-                question=request.question,
+                question=query_req.question,
                 query=res["query"],
                 result=parsed_data,
                 summary=conversational_summary,

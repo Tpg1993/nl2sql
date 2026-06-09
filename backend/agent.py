@@ -243,7 +243,14 @@ class EHRQueryAgent:
             return {"messages": [AIMessage(content=result)], "latencies": latencies}
         except Exception as e:
             err_str = str(e)
-            is_security = "Security violation" in err_str or "readonly database" in err_str
+            err_str_lower = err_str.lower()
+            is_security = (
+                "security violation" in err_str_lower or
+                "readonly database" in err_str_lower or
+                "permission denied" in err_str_lower or
+                "does not have privilege" in err_str_lower or
+                "unauthorized" in err_str_lower
+            )
             if is_security and not err_str.startswith("Security violation"):
                 result = f"Error executing query: Security violation: {err_str}"
             else:
