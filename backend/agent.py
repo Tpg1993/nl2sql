@@ -28,6 +28,7 @@ class AgentState(MessagesState):
     lineage: Dict[str, Any]
     pii_params: Dict[str, str]
     retrieved_tables: List[str]
+    rag_savings_pct: float
 
 
 class EHRQueryAgent:
@@ -98,6 +99,15 @@ class EHRQueryAgent:
         self.override_store = ExpertOverrideStore()
         self.prompt_library = PromptLibrary()
         self.metadata_rag = MetadataRAG(self.engine)
+
+        # Pre-calculate full DDL length for RAG savings metrics
+        try:
+            all_tables = self.db.get_usable_table_names()
+            all_tables_str = ", ".join(all_tables)
+            self.full_schema_ddl_len = len(self.get_schema_tool.invoke(all_tables_str))
+        except Exception as e:
+            print(f"[EHRQueryAgent] Warning: failed to pre-calculate full schema length: {e}")
+            self.full_schema_ddl_len = 1000
 
         # Build and compile LangGraph state machine
         self.agent = self._compile_graph()
@@ -175,10 +185,18 @@ class EHRQueryAgent:
         latencies = state.get("latencies", {}).copy()
         latencies["schema"] = latencies.get("schema", 0.0) + elapsed_ms
         
+        # Calculate schema prompt character savings percentage
+        retrieved_len = len(schema_result) if schema_result else 0
+        full_len = getattr(self, "full_schema_ddl_len", 1000)
+        rag_savings_pct = round((1 - retrieved_len / full_len) * 100, 2) if full_len > 0 else 0.0
+        rag_savings_pct = max(0.0, min(100.0, rag_savings_pct))
+        print(f"-> RAG Schema Prompt Savings: {rag_savings_pct}% ({retrieved_len} / {full_len} chars)")
+        
         return {
             "messages": [AIMessage(content=schema_result)],
             "latencies": latencies,
-            "retrieved_tables": retrieved_tables
+            "retrieved_tables": retrieved_tables,
+            "rag_savings_pct": rag_savings_pct
         }
 
     def generate_query_node(self, state: AgentState) -> Dict[str, Any]:
@@ -537,9 +555,9 @@ class EHRQueryAgent:
 
     def query(self, question: str) -> str:
         """Runs the compiled graph workflow for a natural language question, sanitizing input PII."""
-        sanitized_question, pii_params = self.sanitize_and_extract_pii(question)
+        gray_question, pii_params = self.sanitize_and_extract_pii(question)
         initial_state = {
-            "messages": [HumanMessage(content=sanitized_question)],
+            "messages": [HumanMessage(content=gray_question)],
             "retries": 0,
             "latencies": {
                 "schema": 0.0,
@@ -548,7 +566,8 @@ class EHRQueryAgent:
                 "summarization": 0.0
             },
             "pii_params": pii_params,
-            "retrieved_tables": []
+            "retrieved_tables": [],
+            "rag_savings_pct": 0.0
         }
         output = self.agent.invoke(initial_state)
         return output["messages"][-1].content
@@ -566,7 +585,8 @@ class EHRQueryAgent:
                 "summarization": 0.0
             },
             "pii_params": pii_params,
-            "retrieved_tables": []
+            "retrieved_tables": [],
+            "rag_savings_pct": 0.0
         }
         output = self.agent.invoke(initial_state)
 
@@ -633,5 +653,6 @@ class EHRQueryAgent:
             "is_expert_matched": output.get("is_expert_matched", False),
             "lineage": output.get("lineage", {}),
             "estimated_cost": output.get("estimated_cost", 0.0),
-            "retrieved_tables": output.get("retrieved_tables", [])
+            "retrieved_tables": output.get("retrieved_tables", []),
+            "rag_savings_pct": output.get("rag_savings_pct", 0.0)
         }

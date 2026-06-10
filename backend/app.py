@@ -389,11 +389,13 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             model = "Unknown Model"
             retries = 0
             retrieved_tables = []
+            rag_savings_pct = 0.0
             if isinstance(cached_tokens, dict):
                 cached_tokens = cached_tokens.copy()
                 model = cached_tokens.pop("model", "Unknown Model")
                 retries = cached_tokens.pop("retries", 0)
                 retrieved_tables = cached_tokens.pop("retrieved_tables", [])
+                rag_savings_pct = cached_tokens.pop("rag_savings_pct", 0.0)
             
             # Apply dynamic masking on cached raw results
             raw_results = cached.get("result")
@@ -420,6 +422,7 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
                 "lineage": {},
                 "estimated_cost": 0.0,
                 "retrieved_tables": retrieved_tables,
+                "rag_savings_pct": rag_savings_pct,
                 "error": None
             }
 
@@ -448,6 +451,7 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             cached_tokens_payload["model"] = res.get("model", "gpt-4o-mini")
             cached_tokens_payload["retries"] = res.get("retries", 0)
             cached_tokens_payload["retrieved_tables"] = res.get("retrieved_tables", [])
+            cached_tokens_payload["rag_savings_pct"] = res.get("rag_savings_pct", 0.0)
             
             cache_manager.set(
                 question=query_req.question,
@@ -475,6 +479,7 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             "lineage": res.get("lineage", {}),
             "estimated_cost": res.get("estimated_cost", 0.0),
             "retrieved_tables": res.get("retrieved_tables", []),
+            "rag_savings_pct": res.get("rag_savings_pct", 0.0),
             "error": error_message
         }
     except Exception as e:
@@ -495,6 +500,7 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             "is_expert_matched": False,
             "lineage": {},
             "estimated_cost": 0.0,
-            "retrieved_tables": []
+            "retrieved_tables": [],
+            "rag_savings_pct": 0.0
         }
 

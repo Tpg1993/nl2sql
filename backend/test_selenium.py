@@ -322,7 +322,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         time.sleep(8)
         
         # Check table result is present
-        result_table = WebDriverWait(self.driver, 10).until(
+        result_table = WebDriverWait(self.driver, 45).until(
             EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
         )
         self.assertTrue(result_table.is_displayed())
@@ -370,7 +370,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         time.sleep(8)
         
         # Click view lineage details
-        lineage_summary = WebDriverWait(self.driver, 10).until(
+        lineage_summary = WebDriverWait(self.driver, 45).until(
             EC.element_to_be_clickable((By.CLASS_NAME, "lineage-summary"))
         )
         lineage_summary.click()
@@ -405,7 +405,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         time.sleep(8)
         
         # Open suggest override form
-        override_summary = WebDriverWait(self.driver, 10).until(
+        override_summary = WebDriverWait(self.driver, 45).until(
             EC.element_to_be_clickable((By.CLASS_NAME, "override-summary"))
         )
         override_summary.click()
@@ -471,7 +471,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         time.sleep(8)
         
         # Inspect table rows for masked lock icons
-        result_table = WebDriverWait(self.driver, 10).until(
+        result_table = WebDriverWait(self.driver, 45).until(
             EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
         )
         

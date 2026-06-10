@@ -219,7 +219,7 @@ async function submitQuestion(question) {
         
         const data = await response.json();
         if (data.success) {
-            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries, data.is_expert_matched, data.lineage, data.estimated_cost, question, data.retrieved_tables);
+            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries, data.is_expert_matched, data.lineage, data.estimated_cost, question, data.retrieved_tables, data.rag_savings_pct);
         } else {
             appendAssistantError(data.error || "An error occurred during query generation.");
         }
@@ -372,7 +372,7 @@ function highlightSQL(sql) {
 }
 
 // Append Assistant Success Response bubble (SQL, Table, and Tokens)
-function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null, model = "gpt-4o-mini", retries = 0, isExpertMatched = false, lineage = {}, estimatedCost = 0.0, questionText = "", retrievedTables = []) {
+function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null, model = "gpt-4o-mini", retries = 0, isExpertMatched = false, lineage = {}, estimatedCost = 0.0, questionText = "", retrievedTables = [], ragSavingsPct = 0.0) {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
@@ -534,7 +534,7 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                             </span>
                             <i class="fa-solid fa-chevron-down summary-arrow"></i>
                         </summary>
-                        <div class="token-stats">
+                        <div class="token-stats" style="grid-template-columns: 1fr 1fr 1fr 1.2fr;">
                             <div class="stat-item">
                                 <span class="stat-label">${cached ? 'Saved Input' : 'Input Tokens'}</span>
                                 <span class="stat-value ${cached ? 'saved-highlight' : ''}">${tokens.input || '0'}</span>
@@ -546,6 +546,10 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                             <div class="stat-item total ${cached ? 'saved' : ''}">
                                 <span class="stat-label">${cached ? 'Total Saved' : 'Total Tokens'}</span>
                                 <span class="stat-value">${tokens.total || '0'}</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label" style="color: #34d399;">RAG Savings</span>
+                                <span class="stat-value" style="color: #34d399; font-weight: 700;">${ragSavingsPct ? parseFloat(ragSavingsPct).toFixed(1) + '%' : '0.0%'}</span>
                             </div>
                         </div>
                         
