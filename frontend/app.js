@@ -548,8 +548,25 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                                 <span class="stat-value">${tokens.total || '0'}</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-label" style="color: #34d399;">RAG Savings</span>
+                                <span class="stat-label" style="color: #34d399; display: flex; align-items: center; gap: 4px;">
+                                    RAG Savings
+                                    <span class="info-tooltip" data-tooltip="Percentage reduction in prompt schema payload size achieved by retrieving only relevant schemas instead of the full database schema.">
+                                        <i class="fa-solid fa-circle-info" style="font-size: 0.75rem; opacity: 0.8; cursor: help;"></i>
+                                    </span>
+                                </span>
                                 <span class="stat-value" style="color: #34d399; font-weight: 700;">${ragSavingsPct ? parseFloat(ragSavingsPct).toFixed(1) + '%' : '0.0%'}</span>
+                            </div>
+                        </div>
+
+                        <!-- How RAG Saves Cost Info Banner -->
+                        <div class="rag-info-banner" style="background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 10px; margin: 10px 14px 0 14px; font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary); display: flex; align-items: start; gap: 8px;">
+                            <i class="fa-solid fa-leaf" style="color: #34d399; margin-top: 2px;"></i>
+                            <div>
+                                <strong>How Metadata RAG Saves Cost:</strong> 
+                                Instead of loading the full schema of all tables (which can consume tens of thousands of tokens per query), the agent's <code>MetadataRAG</code> system uses semantic search to only retrieve the schema of relevant tables. This reduces the prompt size, saving <strong>${ragSavingsPct ? parseFloat(ragSavingsPct).toFixed(1) + '%' : '0.0%'}</strong> of the schema context size.
+                                <a href="rag_flow.html" target="_blank" style="color: #60a5fa; text-decoration: underline; font-weight: 600; margin-left: 4px; display: inline-flex; align-items: center; gap: 2px;">
+                                    View Detailed Flow <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.7rem;"></i>
+                                </a>
                             </div>
                         </div>
                         
@@ -1080,10 +1097,16 @@ function getTableOptionsHTML(selectedTable = "") {
 // Helper to populate select dropdowns with columns list of a specific table
 function getColumnOptionsHTML(tableName, selectedColumn = "") {
     let html = `<option value="">-- Select Column --</option>`;
+    let found = false;
     if (tableName && dbMetadata[tableName]) {
         dbMetadata[tableName].forEach(col => {
-            html += `<option value="${col}" ${col === selectedColumn ? "selected" : ""}>${col}</option>`;
+            const isSel = col === selectedColumn;
+            if (isSel) found = true;
+            html += `<option value="${col}" ${isSel ? "selected" : ""}>${col}</option>`;
         });
+    }
+    if (selectedColumn && !found) {
+        html += `<option value="${selectedColumn}" selected>${selectedColumn} (inherited/joined)</option>`;
     }
     return html;
 }
@@ -1091,13 +1114,20 @@ function getColumnOptionsHTML(tableName, selectedColumn = "") {
 // Helper to populate select dropdowns with entities list
 function getEntityOptionsHTML(selectedEntity = "") {
     let html = `<option value="">-- Select Entity --</option>`;
+    let found = false;
     if (activeConfig && activeConfig.entities) {
         Object.keys(activeConfig.entities).forEach(ent => {
-            html += `<option value="${ent}" ${ent === selectedEntity ? "selected" : ""}>${ent}</option>`;
+            const isSel = ent === selectedEntity;
+            if (isSel) found = true;
+            html += `<option value="${ent}" ${isSel ? "selected" : ""}>${ent}</option>`;
         });
+    }
+    if (selectedEntity && !found) {
+        html += `<option value="${selectedEntity}" selected>${selectedEntity}</option>`;
     }
     return html;
 }
+
 
 // ---------------------------------------------------------------------
 // 1. ENTITIES TAB MAPPINGS

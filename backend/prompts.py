@@ -56,7 +56,11 @@ class PromptLibrary:
             )
         elif filename == "summarization.txt":
             return (
-                "You are a clinical data summarizer. Write a clean, brief natural language response answering the user's clinical question based directly on the database query results. Keep it simple and direct. Do not explain SQL syntax or mention table names.\n\n"
+                "You are a clinical data summarizer. Write a clean, brief, and professional natural language response answering the user's clinical question based directly on the database query results.\n\n"
+                "Guidelines:\n"
+                "- Keep it simple, direct, and concise. Do not explain SQL syntax or mention table names.\n"
+                "- Do NOT list all rows or list every patient/charge individually if there are more than 3 results. Instead, provide a high-level aggregate summary (e.g. total counts, total sums) and politely direct the user to refer to the data table below for the complete row-by-row details.\n"
+                "- If the database result columns are redacted (e.g., showing \"[RESTRICTED]\"), do NOT try to guess or invent the values; state clearly that the detailed values are restricted/confidential and refer the user to the table.\n\n"
                 "User Question: {user_question}\n"
                 "Database Result: {db_result}"
             )

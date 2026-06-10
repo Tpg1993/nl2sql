@@ -29,6 +29,7 @@ class AgentState(MessagesState):
     pii_params: Dict[str, str]
     retrieved_tables: List[str]
     rag_savings_pct: float
+    user_context: Dict[str, Any]
 
 
 class EHRQueryAgent:
@@ -397,6 +398,7 @@ class EHRQueryAgent:
         
         # Traverse history to identify query outputs and query string
         db_result = ""
+        sql_query = ""
         for msg in reversed(state["messages"]):
             content = msg.content
             if content.startswith("Error executing query:"):
@@ -404,7 +406,9 @@ class EHRQueryAgent:
                 break
             elif not db_result:
                 db_result = content
-                break
+            
+            if "SELECT" in content.upper() and not sql_query:
+                sql_query = content
 
         # Check for security or cost violation first to bypass LLM and return static response
         if "Security violation" in db_result:
@@ -425,12 +429,26 @@ class EHRQueryAgent:
             latencies["summarization"] = latencies.get("summarization", 0.0) + elapsed_ms
             return {"messages": [AIMessage(content=summary_content)], "latencies": latencies}
 
+        is_error = db_result.startswith("Error executing query:")
+
+        # Apply compliance masking/redaction to database results prior to LLM summarization
+        user_context = state.get("user_context")
+        if user_context and not is_error and db_result and sql_query:
+            import ast
+            try:
+                parsed_db = ast.literal_eval(db_result)
+            except Exception:
+                parsed_db = db_result
+            if isinstance(parsed_db, list):
+                from .app import apply_policy_masking
+                masked_db = apply_policy_masking(parsed_db, sql_query, user_context, self)
+                db_result = str(masked_db)
+
         # Truncate database result if it exceeds a safe size (e.g. 5000 characters)
         if len(db_result) > 5000:
             print(f"-> Truncating large database result from {len(db_result)} to 5000 characters to prevent API payload limits.")
             db_result = db_result[:5000] + "\n... [Truncated for LLM payload size limits]"
 
-        is_error = db_result.startswith("Error executing query:")
         prompt = self.prompt_library.format_summarization(
             user_question=user_question,
             db_result=db_result,
@@ -553,7 +571,7 @@ class EHRQueryAgent:
         
         return builder.compile()
 
-    def query(self, question: str) -> str:
+    def query(self, question: str, user_context: dict = None) -> str:
         """Runs the compiled graph workflow for a natural language question, sanitizing input PII."""
         gray_question, pii_params = self.sanitize_and_extract_pii(question)
         initial_state = {
@@ -567,12 +585,13 @@ class EHRQueryAgent:
             },
             "pii_params": pii_params,
             "retrieved_tables": [],
-            "rag_savings_pct": 0.0
+            "rag_savings_pct": 0.0,
+            "user_context": user_context
         }
         output = self.agent.invoke(initial_state)
         return output["messages"][-1].content
 
-    def query_detailed(self, question: str) -> dict:
+    def query_detailed(self, question: str, user_context: dict = None) -> dict:
         """Runs the compiled graph workflow and returns generated SQL, DB results, conversational summary, and LLM token usage."""
         sanitized_question, pii_params = self.sanitize_and_extract_pii(question)
         initial_state = {
@@ -586,7 +605,8 @@ class EHRQueryAgent:
             },
             "pii_params": pii_params,
             "retrieved_tables": [],
-            "rag_savings_pct": 0.0
+            "rag_savings_pct": 0.0,
+            "user_context": user_context
         }
         output = self.agent.invoke(initial_state)
 

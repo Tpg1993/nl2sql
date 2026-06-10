@@ -205,4 +205,9 @@ security_policies:
     doctor:
       masking_rules:
         financial: redact
-      abac_policies: []
+      abac_policies:
+      - entity_context: Patient
+        attribute_match:
+          user_attribute: department_id
+          db_column: department_id
+        fallback_action: mask

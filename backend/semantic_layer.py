@@ -80,17 +80,22 @@ class SemanticLayer:
 
     def get_column_classification(self, table_name: str, column_name: str) -> str:
         """Scans entities to find the classification of a physical column in a physical table."""
-        # Clean potential table prefixes from column_name (e.g. patients.full_name -> full_name)
+        import re
+        # Extract all words from the column name expression (e.g. SUM(e.total_charges) -> ['SUM', 'e', 'total_charges'])
+        words = re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", column_name)
         clean_col = column_name.split('.')[-1].strip('`"\'')
+        words_set = {w.lower() for w in words}
+        words_set.add(clean_col.lower())
+        
         for entity_name, details in self.entities.items():
-            if details.get("table_name") == table_name:
+            if details.get("table_name", "").lower() == table_name.lower():
                 for logical, field_val in details.get("fields", {}).items():
-                    if isinstance(field_val, dict):
-                        if field_val.get("column_name") == clean_col:
+                    col_name = field_val.get("column_name") if isinstance(field_val, dict) else field_val
+                    if col_name and col_name.lower() in words_set:
+                        if isinstance(field_val, dict):
                             return field_val.get("classification")
-                    elif field_val == clean_col:
-                        return None
         return None
+
 
     def get_security_policies(self) -> Dict[str, Any]:
         """Returns the security policies dictionary."""

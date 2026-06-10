@@ -63,9 +63,8 @@ def get_select_columns(sql: str) -> list:
     
     resolved = []
     for col in cols:
-        col_upper = col.upper()
-        if " AS " in col_upper:
-            parts = col.split(" AS " if " AS " in col else " as ")
+        parts = re.split(r'\bAS\b', col, flags=re.IGNORECASE)
+        if len(parts) > 1:
             expr = parts[0].strip()
         else:
             parts = col.split()
@@ -100,16 +99,59 @@ def apply_policy_masking(parsed_data, sql_query, user_context, agent):
             queried_tables.append(tbl)
             
     # Extract select columns & match classifications
-    select_columns = get_select_columns(sql_query)
+    select_columns_raw = []
+    if sql_query:
+        cleaned = " ".join(sql_query.split())
+        select_match = re.search(r"SELECT\s+(.*?)\s+FROM", cleaned, re.IGNORECASE)
+        if select_match:
+            select_clause = select_match.group(1)
+            current = []
+            paren_depth = 0
+            for char in select_clause:
+                if char == '(':
+                    paren_depth += 1
+                elif char == ')':
+                    paren_depth -= 1
+                if char == ',' and paren_depth == 0:
+                    select_columns_raw.append("".join(current).strip())
+                    current = []
+                else:
+                    current.append(char)
+            select_columns_raw.append("".join(current).strip())
+
+    col_classifications_map = {}
     col_classifications = []
-    for expr in select_columns:
-        col_part = expr.split('.')[-1].strip('`"\'')
+    
+    for col in select_columns_raw:
+        if not col:
+            continue
+        parts = re.split(r'\bAS\b', col, flags=re.IGNORECASE)
+        if len(parts) > 1:
+            expr = parts[0].strip()
+            alias = parts[1].strip().strip('`"\'')
+        else:
+            space_parts = col.split()
+            if len(space_parts) > 1 and space_parts[-1].isidentifier():
+                expr = " ".join(space_parts[:-1]).strip()
+                alias = space_parts[-1].strip().strip('`"\'')
+            else:
+                expr = col.strip()
+                alias = None
+                
+        expr_clean = expr.split('.')[-1].strip('`"\'')
+        alias_clean = alias.split('.')[-1].strip('`"\'') if alias else None
+        
         classification = None
         for tbl in queried_tables:
-            classification = agent.semantic_layer.get_column_classification(tbl, col_part)
+            classification = agent.semantic_layer.get_column_classification(tbl, expr_clean)
             if classification:
                 break
-        col_classifications.append((col_part, classification))
+                
+        col_classifications.append((expr_clean, classification))
+        
+        for key in [expr, expr_clean, alias, alias_clean]:
+            if key:
+                col_classifications_map[key.lower()] = classification
 
     # Evaluate ABAC policy if configured for this role
     abac_policies = role_policy.get("abac_policies", [])
@@ -189,18 +231,32 @@ def apply_policy_masking(parsed_data, sql_query, user_context, agent):
         
         # If parsed_data is list of dicts
         if isinstance(row, dict):
-            if active_abac and db_col in row:
-                if str(row[db_col]) != str(user_attr_val):
+            row_db_val = None
+            found_db_col = False
+            if active_abac:
+                for k, v in row.items():
+                    clean_k = k.split('.')[-1].strip('`"\'').lower()
+                    if clean_k == db_col.lower():
+                        row_db_val = v
+                        found_db_col = True
+                        break
+            if active_abac and found_db_col:
+                if str(row_db_val) != str(user_attr_val):
                     row_abac_passed = False
             
             new_row = {}
             for k, v in row.items():
-                clean_k = k.split('.')[-1].strip('`"\'')
-                classification = None
-                for tbl in queried_tables:
-                    classification = agent.semantic_layer.get_column_classification(tbl, clean_k)
-                    if classification:
-                        break
+                classification = col_classifications_map.get(k.lower())
+                if not classification:
+                    # Fallback to direct lookup
+                    clean_k = k.split('.')[-1].strip('`"\'').lower()
+                    classification = col_classifications_map.get(clean_k)
+                if not classification:
+                    clean_k = k.split('.')[-1].strip('`"\'')
+                    for tbl in queried_tables:
+                        classification = agent.semantic_layer.get_column_classification(tbl, clean_k)
+                        if classification:
+                            break
                 new_row[k] = apply_mask(v, classification, row_abac_passed)
             masked_data.append(new_row)
             
@@ -562,7 +618,7 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
 
     # 2. Run agent if cache miss
     try:
-        res = agent.query_detailed(query_req.question)
+        res = agent.query_detailed(query_req.question, user_context=current_user)
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
         raw_result = res["result"]
         conversational_summary = res.get("summary", "")
