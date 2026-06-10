@@ -337,7 +337,141 @@ def add_expert_override(req: OverrideRequest, current_user: dict = Depends(get_c
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class SemanticLayerConfigPayload(BaseModel):
+    version: str
+    entities: dict
+    relationships: list
+    metrics: dict
+    security_policies: dict
+
+
+@app.get("/api/config/semantic-layer")
+def get_semantic_layer_config(current_user: dict = Depends(get_current_user)):
+    """Retrieves the current semantic layer configuration alongside database table/column metadata."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Only Administrators can view configuration settings."
+        )
+    
+    if not agent:
+        raise HTTPException(status_code=500, detail="Database agent is not initialized.")
+        
+    try:
+        import yaml
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        yaml_path = os.path.join(base_dir, "semantic_layer.yaml")
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            config_data = yaml.safe_load(f)
+            
+        inspector = inspect(agent.engine)
+        db_metadata = {}
+        for table_name in agent.db.get_usable_table_names():
+            columns = [col["name"] for col in inspector.get_columns(table_name)]
+            db_metadata[table_name] = columns
+            
+        return {
+            "success": True,
+            "config": config_data,
+            "db_metadata": db_metadata
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/config/semantic-layer")
+def update_semantic_layer_config(payload: SemanticLayerConfigPayload, current_user: dict = Depends(get_current_user)):
+    """Validates and updates the semantic layer configuration file, reloading it in-memory."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Only Administrators can modify configuration settings."
+        )
+        
+    if not agent:
+        raise HTTPException(status_code=500, detail="Database agent is not initialized.")
+        
+    try:
+        import yaml
+        
+        # 1. Fetch valid tables and columns from the database for validation
+        inspector = inspect(agent.engine)
+        valid_schema = {}
+        for table_name in agent.db.get_usable_table_names():
+            valid_schema[table_name] = [col["name"] for col in inspector.get_columns(table_name)]
+            
+        # 2. Validation Checks
+        # Validate entities
+        for ent_name, ent_data in payload.entities.items():
+            tbl_name = ent_data.get("table_name")
+            if not tbl_name:
+                raise HTTPException(status_code=400, detail=f"Entity '{ent_name}' is missing table_name.")
+            if tbl_name not in valid_schema:
+                raise HTTPException(status_code=400, detail=f"Table '{tbl_name}' mapped to entity '{ent_name}' does not exist in database.")
+                
+            pk = ent_data.get("primary_key")
+            if pk and pk not in valid_schema[tbl_name]:
+                raise HTTPException(status_code=400, detail=f"Primary key '{pk}' in entity '{ent_name}' does not exist in table '{tbl_name}'.")
+                
+            fields = ent_data.get("fields", {})
+            for logical_f, physical_f in fields.items():
+                col_name = physical_f.get("column_name") if isinstance(physical_f, dict) else physical_f
+                if col_name not in valid_schema[tbl_name]:
+                    raise HTTPException(status_code=400, detail=f"Field '{logical_f}' maps to non-existent column '{col_name}' in table '{tbl_name}'.")
+
+        # Validate relationships
+        for rel in payload.relationships:
+            from_ent = rel.get("from_entity")
+            to_ent = rel.get("to_entity")
+            if from_ent not in payload.entities:
+                raise HTTPException(status_code=400, detail=f"Relationship has non-existent source entity '{from_ent}'.")
+            if to_ent not in payload.entities:
+                raise HTTPException(status_code=400, detail=f"Relationship has non-existent destination entity '{to_ent}'.")
+                
+            from_tbl = payload.entities[from_ent]["table_name"]
+            to_tbl = payload.entities[to_ent]["table_name"]
+            
+            join_keys = rel.get("join_keys", {})
+            from_key = join_keys.get("from_key")
+            to_key = join_keys.get("to_key")
+            
+            if from_key not in valid_schema[from_tbl]:
+                raise HTTPException(status_code=400, detail=f"Join key '{from_key}' does not exist in table '{from_tbl}'.")
+            if to_key not in valid_schema[to_tbl]:
+                raise HTTPException(status_code=400, detail=f"Join key '{to_key}' does not exist in table '{to_tbl}'.")
+
+        # 3. Write back to file
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        yaml_path = os.path.join(base_dir, "semantic_layer.yaml")
+        
+        # Convert Pydantic payload to Python dict
+        config_dict = payload.model_dump()
+        
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
+            
+        # 4. Hot-reload agent's semantic layer and Metadata RAG in-memory
+        from .semantic_layer import SemanticLayer
+        from .metadata_rag import MetadataRAG
+        agent.semantic_layer = SemanticLayer(yaml_path)
+        agent.metadata_rag = MetadataRAG(agent.engine, yaml_path)
+        
+        # Clear database cache to prevent returning stale cached results
+        if cache_manager:
+            try:
+                cache_manager.clear()
+            except Exception as e:
+                print(f"[Config Editor] Warning: Failed to clear cache: {e}")
+        
+        return {"success": True, "message": "Semantic layer configuration saved and hot-reloaded successfully."}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/metadata")
+
 @limiter.limit("30/minute")
 def get_metadata(request: Request, current_user: dict = Depends(get_current_user)):
     """Retrieve database metadata (tables and columns) for UI sidebar."""

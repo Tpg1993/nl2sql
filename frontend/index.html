@@ -111,6 +111,9 @@
                     <button id="logout-btn" class="theme-toggle-btn" title="Logout Session" style="display: none;">
                         <i class="fa-solid fa-right-from-bracket"></i>
                     </button>
+                    <button id="settings-toggle-btn" class="theme-toggle-btn" title="Semantic Layer Editor" style="display: none;">
+                        <i class="fa-solid fa-gears"></i>
+                    </button>
                     <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
                         <i class="fa-solid fa-sun"></i>
                     </button>
@@ -171,7 +174,83 @@
         </main>
     </div>
 
+    <!-- Settings Drawer / Modal Overlay -->
+    <div class="settings-drawer-overlay" id="settings-overlay" style="display: none;">
+        <div class="settings-drawer">
+            <div class="settings-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-gears settings-logo"></i>
+                    <h2>Semantic Configurator</h2>
+                </div>
+                <button id="close-settings-btn" class="close-settings-btn" title="Close Drawer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="settings-body">
+                <!-- Navigation Tabs inside Configurator -->
+                <div class="settings-tabs">
+                    <button class="settings-tab-btn active" data-tab="tab-entities">Entities</button>
+                    <button class="settings-tab-btn" data-tab="tab-relationships">Relationships</button>
+                    <button class="settings-tab-btn" data-tab="tab-metrics">Metrics</button>
+                    <button class="settings-tab-btn" data-tab="tab-policies">Policies</button>
+                </div>
+                
+                <div class="settings-content-container">
+                    <!-- Entities Tab -->
+                    <div class="settings-tab-content active" id="tab-entities">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <h3>Entity Schema Mappings</h3>
+                            <button class="action-btn" id="add-entity-btn"><i class="fa-solid fa-plus"></i> Add Entity</button>
+                        </div>
+                        <div class="entities-list" id="entities-list">
+                            <!-- Dynamic Entity Rows -->
+                        </div>
+                    </div>
+                    
+                    <!-- Relationships Tab -->
+                    <div class="settings-tab-content" id="tab-relationships">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <h3>Join Configurations</h3>
+                            <button class="action-btn" id="add-relationship-btn"><i class="fa-solid fa-plus"></i> Add Join</button>
+                        </div>
+                        <div class="relationships-list" id="relationships-list">
+                            <!-- Dynamic Relationship Rows -->
+                        </div>
+                    </div>
+                    
+                    <!-- Metrics Tab -->
+                    <div class="settings-tab-content" id="tab-metrics">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <h3>Predefined Metrics</h3>
+                            <button class="action-btn" id="add-metric-btn"><i class="fa-solid fa-plus"></i> Add Metric</button>
+                        </div>
+                        <div class="metrics-list" id="metrics-list">
+                            <!-- Dynamic Metric Rows -->
+                        </div>
+                    </div>
+                    
+                    <!-- Policies Tab -->
+                    <div class="settings-tab-content" id="tab-policies">
+                        <h3>Security Policies (RBAC/ABAC)</h3>
+                        <div class="policies-container" id="policies-container">
+                            <!-- Dynamic Role Policy Editor -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="settings-footer">
+                <span id="settings-status-msg" style="display: none; font-size: 0.85rem; font-weight: 500;"></span>
+                <button class="save-settings-btn" id="save-settings-btn">
+                    <i class="fa-solid fa-floppy-disk"></i> Save & Hot-Reload
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Script Entry -->
     <script src="app.js"></script>
 </body>
 </html>
+

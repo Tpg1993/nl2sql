@@ -1,224 +1,208 @@
-version: "1.0.0"
-
+version: 1.0.0
 entities:
   Patient:
-    table_name: "patients"
-    primary_key: "patient_id"
-    description: "Represents registered patients and their demographic details."
+    table_name: patients
+    primary_key: patient_id
+    description: Represents registered patients and their demographic details.
     fields:
-      id: "patient_id"
-      mrn: "mrn"
+      id: patient_id
+      mrn: mrn
       name:
-        column_name: "full_name"
-        classification: "pii_name"
-      gender: "gender"
+        column_name: full_name
+        classification: pii_name
+      gender: gender
       birth_date:
-        column_name: "dob"
-        classification: "pii_dob"
+        column_name: dob
+        classification: pii_dob
       phone:
-        column_name: "phone"
-        classification: "pii_phone"
+        column_name: phone
+        classification: pii_phone
       email:
-        column_name: "email"
-        classification: "pii_email"
-      city: "city"
-      state: "state"
-      blood_group: "blood_group"
-      marital_status: "marital_status"
-
+        column_name: email
+        classification: pii_email
+      city: city
+      state: state
+      blood_group: blood_group
+      marital_status: marital_status
   Provider:
-    table_name: "providers"
-    primary_key: "provider_id"
-    description: "Represents healthcare providers or doctors."
+    table_name: providers
+    primary_key: provider_id
+    description: Represents healthcare providers or doctors.
     fields:
-      id: "provider_id"
-      code: "provider_code"
-      name: "full_name"
-      gender: "gender"
-      specialty: "specialty"
-      department_id: "department_id"
-      years_experience: "years_experience"
-
+      id: provider_id
+      code: provider_code
+      name: full_name
+      gender: gender
+      specialty: specialty
+      department_id: department_id
+      years_experience: years_experience
   Department:
-    table_name: "departments"
-    primary_key: "department_id"
-    description: "Represents departments or units in the medical facility."
+    table_name: departments
+    primary_key: department_id
+    description: Represents departments or units in the medical facility.
     fields:
-      id: "department_id"
-      code: "department_code"
-      name: "department_name"
-      location: "location"
-      cost_center: "cost_center"
-
+      id: department_id
+      code: department_code
+      name: department_name
+      location: location
+      cost_center: cost_center
   Encounter:
-    table_name: "encounters"
-    primary_key: "encounter_id"
-    description: "Represents patient visits or admissions."
+    table_name: encounters
+    primary_key: encounter_id
+    description: Represents patient visits or admissions.
     fields:
-      id: "encounter_id"
-      patient_id: "patient_id"
-      provider_id: "provider_id"
-      department_id: "department_id"
-      type: "encounter_type"
-      status: "encounter_status"
-      admission_date: "admission_dt"
-      discharge_date: "discharge_dt"
+      id: encounter_id
+      patient_id: patient_id
+      provider_id: provider_id
+      department_id: department_id
+      type: encounter_type
+      status: encounter_status
+      admission_date: admission_dt
+      discharge_date: discharge_dt
       charges:
-        column_name: "total_charges"
-        classification: "financial"
-      payment_status: "payment_status"
-      chief_complaint: "chief_complaint"
-
+        column_name: total_charges
+        classification: financial
+      payment_status: payment_status
+      chief_complaint: chief_complaint
   Diagnosis:
-    table_name: "diagnoses"
-    primary_key: "diagnosis_id"
-    description: "Represents medical diagnoses recorded during encounters."
+    table_name: diagnoses
+    primary_key: diagnosis_id
+    description: Represents medical diagnoses recorded during encounters.
     fields:
-      id: "diagnosis_id"
-      encounter_id: "encounter_id"
-      patient_id: "patient_id"
-      icd10_code: "icd10_code"
-      name: "diagnosis_name"
-      type: "diagnosis_type"
-      severity: "severity"
-      is_chronic: "is_chronic"
-
+      id: diagnosis_id
+      encounter_id: encounter_id
+      patient_id: patient_id
+      icd10_code: icd10_code
+      name: diagnosis_name
+      type: diagnosis_type
+      severity: severity
+      is_chronic: is_chronic
   Medication:
-    table_name: "medications"
-    primary_key: "medication_id"
-    description: "Represents medications prescribed to patients."
+    table_name: medications
+    primary_key: medication_id
+    description: Represents medications prescribed to patients.
     fields:
-      id: "medication_id"
-      patient_id: "patient_id"
-      encounter_id: "encounter_id"
-      provider_id: "provider_id"
-      name: "drug_name"
-      class: "drug_class"
-      dose: "dose"
-      is_active: "is_active"
-
+      id: medication_id
+      patient_id: patient_id
+      encounter_id: encounter_id
+      provider_id: provider_id
+      name: drug_name
+      class: drug_class
+      dose: dose
+      is_active: is_active
   Allergy:
-    table_name: "allergies"
-    primary_key: "allergy_id"
-    description: "Represents noted allergies of patients."
+    table_name: allergies
+    primary_key: allergy_id
+    description: Represents noted allergies of patients.
     fields:
-      id: "allergy_id"
-      patient_id: "patient_id"
-      allergen_name: "allergen_name"
-      severity: "severity"
-      is_active: "is_active"
-
+      id: allergy_id
+      patient_id: patient_id
+      allergen_name: allergen_name
+      severity: severity
+      is_active: is_active
   Vital:
-    table_name: "vitals"
-    primary_key: "vital_id"
-    description: "Represents recorded patient vitals metrics."
+    table_name: vitals
+    primary_key: vital_id
+    description: Represents recorded patient vitals metrics.
     fields:
-      id: "vital_id"
-      encounter_id: "encounter_id"
-      patient_id: "patient_id"
-      sbp: "sbp"
-      dbp: "dbp"
-      heart_rate: "heart_rate"
-      temperature: "temperature_c"
-      spo2: "spo2"
-      bmi: "bmi"
-      weight_kg: "weight_kg"
-      height_cm: "height_cm"
-
+      id: vital_id
+      encounter_id: encounter_id
+      patient_id: patient_id
+      sbp: sbp
+      dbp: dbp
+      heart_rate: heart_rate
+      temperature: temperature_c
+      spo2: spo2
+      bmi: bmi
+      weight_kg: weight_kg
+      height_cm: height_cm
 relationships:
-  - from_entity: "Encounter"
-    to_entity: "Patient"
-    join_type: "many_to_one"
-    join_keys:
-      from_key: "patient_id"
-      to_key: "patient_id"
-  - from_entity: "Encounter"
-    to_entity: "Provider"
-    join_type: "many_to_one"
-    join_keys:
-      from_key: "provider_id"
-      to_key: "provider_id"
-  - from_entity: "Encounter"
-    to_entity: "Department"
-    join_type: "many_to_one"
-    join_keys:
-      from_key: "department_id"
-      to_key: "department_id"
-  - from_entity: "Provider"
-    to_entity: "Department"
-    join_type: "many_to_one"
-    join_keys:
-      from_key: "department_id"
-      to_key: "department_id"
-  - from_entity: "Diagnosis"
-    to_entity: "Patient"
-    join_type: "many_to_one"
-    join_keys:
-      from_key: "patient_id"
-      to_key: "patient_id"
-  - from_entity: "Diagnosis"
-    to_entity: "Encounter"
-    join_type: "many_to_one"
-    join_keys:
-      from_key: "encounter_id"
-      to_key: "encounter_id"
-  - from_entity: "Medication"
-    to_entity: "Patient"
-    join_type: "many_to_one"
-    join_keys:
-      from_key: "patient_id"
-      to_key: "patient_id"
-  - from_entity: "Allergy"
-    to_entity: "Patient"
-    join_type: "many_to_one"
-    join_keys:
-      from_key: "patient_id"
-      to_key: "patient_id"
-  - from_entity: "Vital"
-    to_entity: "Patient"
-    join_type: "many_to_one"
-    join_keys:
-      from_key: "patient_id"
-      to_key: "patient_id"
-
+- from_entity: Encounter
+  to_entity: Patient
+  join_type: many_to_one
+  join_keys:
+    from_key: patient_id
+    to_key: patient_id
+- from_entity: Encounter
+  to_entity: Provider
+  join_type: many_to_one
+  join_keys:
+    from_key: provider_id
+    to_key: provider_id
+- from_entity: Encounter
+  to_entity: Department
+  join_type: many_to_one
+  join_keys:
+    from_key: department_id
+    to_key: department_id
+- from_entity: Provider
+  to_entity: Department
+  join_type: many_to_one
+  join_keys:
+    from_key: department_id
+    to_key: department_id
+- from_entity: Diagnosis
+  to_entity: Patient
+  join_type: many_to_one
+  join_keys:
+    from_key: patient_id
+    to_key: patient_id
+- from_entity: Diagnosis
+  to_entity: Encounter
+  join_type: many_to_one
+  join_keys:
+    from_key: encounter_id
+    to_key: encounter_id
+- from_entity: Medication
+  to_entity: Patient
+  join_type: many_to_one
+  join_keys:
+    from_key: patient_id
+    to_key: patient_id
+- from_entity: Allergy
+  to_entity: Patient
+  join_type: many_to_one
+  join_keys:
+    from_key: patient_id
+    to_key: patient_id
+- from_entity: Vital
+  to_entity: Patient
+  join_type: many_to_one
+  join_keys:
+    from_key: patient_id
+    to_key: patient_id
 metrics:
   Total Patients:
-    description: "Total number of registered patients"
-    formula: "SELECT COUNT(*) FROM patients"
+    description: Total number of registered patients
+    formula: SELECT COUNT(*) FROM patients
   Total Admissions:
-    description: "Total count of patient admissions/encounters"
-    formula: "SELECT COUNT(*) FROM encounters"
+    description: Total count of patient admissions/encounters
+    formula: SELECT COUNT(*) FROM encounters
   Total Charges:
-    description: "Sum of total charges billed to patients"
-    formula: "SELECT SUM(total_charges) FROM encounters"
+    description: Sum of total charges billed to patients
+    formula: SELECT SUM(total_charges) FROM encounters
   Active Allergies:
-    description: "Allergies marked as currently active"
-    formula: "SELECT COUNT(*) FROM allergies WHERE is_active = 1"
-    filters:
-      active: "is_active = 1"
+    description: Allergies marked as currently active
+    formula: SELECT COUNT(*) FROM allergies WHERE is_active = 1
   Active Medications:
-    description: "Medications currently actively prescribed to patients"
-    formula: "SELECT COUNT(*) FROM medications WHERE is_active = 1"
-    filters:
-      active: "is_active = 1"
-
+    description: Medications currently actively prescribed to patients
+    formula: SELECT COUNT(*) FROM medications WHERE is_active = 1
+  Selenium Dynamic Metric:
+    description: Metric compiled by Selenium E2E test suite
+    formula: SELECT COUNT(*) FROM vitals
 security_policies:
   roles:
     admin:
-      clearance: "unrestricted"
+      clearance: unrestricted
     researcher:
       masking_rules:
-        pii_name: "mask_name"
-        pii_dob: "mask_dob"
-        pii_phone: "mask_phone"
-        pii_email: "mask_email"
-        financial: "redact"
+        pii_name: mask_name
+        pii_dob: mask_dob
+        pii_phone: mask_phone
+        pii_email: mask_email
+        financial: redact
+      abac_policies: []
     doctor:
       masking_rules:
-        financial: "redact"
-      abac_policies:
-        - entity_context: "Patient"
-          attribute_match:
-            user_attribute: "department_id"
-            db_column: "department_id"
-          fallback_action: "mask"
+        financial: redact
+      abac_policies: []

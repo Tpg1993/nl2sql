@@ -482,5 +482,92 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
+    def test_10_semantic_configurator_admin(self):
+        self.log("[Test 10] Testing Semantic Configurator Panel for Admin and RBAC visibility...")
+        driver = self.driver
+        
+        # 1. Log in as researcher first and verify Settings button is NOT displayed
+        self.login("researcher", "researcher123")
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        settings_btn = driver.find_element(By.ID, "settings-toggle-btn")
+        self.assertFalse(settings_btn.is_displayed(), "Settings button should be hidden for Researcher role.")
+        self.log("-> SUCCESS: Verified settings button is hidden for non-admin user.")
+        self.logout()
+        
+        # 2. Log in as admin and verify Settings button IS displayed
+        self.login("admin", ADMIN_PASSWORD)
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        settings_btn = WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.ID, "settings-toggle-btn"))
+        )
+        self.assertTrue(settings_btn.is_displayed(), "Settings button should be visible for Admin role.")
+        
+        # 3. Click Settings to open drawer
+        settings_btn.click()
+        overlay = WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.ID, "settings-overlay"))
+        )
+        self.assertTrue(overlay.is_displayed(), "Settings drawer overlay should be visible after click.")
+        self.log("-> SUCCESS: Opened Semantic Configurator drawer.")
+        
+        # 4. Navigate to Metrics tab and verify content
+        metrics_tab_btn = driver.find_element(By.XPATH, "//button[@data-tab='tab-metrics']")
+        metrics_tab_btn.click()
+        time.sleep(1)
+        
+        # Check initial metric cards are visible
+        metric_cards = driver.find_elements(By.CLASS_NAME, "metric-card")
+        self.assertGreater(len(metric_cards), 0)
+        self.log(f"-> Verified {len(metric_cards)} metric cards are rendered.")
+        
+        # 5. Click Add Metric
+        add_metric_btn = driver.find_element(By.ID, "add-metric-btn")
+        add_metric_btn.click()
+        time.sleep(1)
+        
+        # Verify a new card is added
+        new_metric_cards = driver.find_elements(By.CLASS_NAME, "metric-card")
+        self.assertEqual(len(new_metric_cards), len(metric_cards) + 1, "A new metric card should be appended.")
+        
+        # 6. Fill in the newly added card (last card)
+        last_card = new_metric_cards[-1]
+        name_input = last_card.find_element(By.CLASS_NAME, "metric-name")
+        formula_textarea = last_card.find_element(By.CLASS_NAME, "metric-formula")
+        desc_input = last_card.find_element(By.CLASS_NAME, "metric-description")
+        
+        name_input.send_keys("Selenium Dynamic Metric")
+        formula_textarea.send_keys("SELECT COUNT(*) FROM vitals")
+        desc_input.send_keys("Metric compiled by Selenium E2E test suite")
+        
+        # 7. Save and Hot-Reload
+        save_btn = driver.find_element(By.ID, "save-settings-btn")
+        save_btn.click()
+        
+        # Wait for status message indicating success
+        status_msg = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.ID, "settings-status-msg"))
+        )
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "settings-status-msg"), "saved & hot-reloaded")
+        )
+        self.log("-> SUCCESS: Semantic config changes saved and hot-reloaded successfully.")
+        
+        # 8. Close drawer
+        close_btn = driver.find_element(By.ID, "close-settings-btn")
+        close_btn.click()
+        
+        # Wait for drawer to close
+        WebDriverWait(driver, 5).until(
+            EC.invisibility_of_element_located((By.ID, "settings-overlay"))
+        )
+        self.log("-> SUCCESS: Closed configurator drawer.")
+        self._test_has_failed = False
+        self.logout()
+
 if __name__ == "__main__":
     unittest.main()
+

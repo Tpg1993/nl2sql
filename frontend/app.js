@@ -930,12 +930,16 @@ function updateAuthUI() {
     const badgeEl = document.getElementById("user-role-badge");
     const roleTextEl = document.getElementById("user-role-text");
     const logoutEl = document.getElementById("logout-btn");
+    const settingsEl = document.getElementById("settings-toggle-btn");
     
     if (token) {
         const payload = parseJwt(token);
         if (payload && payload.role) {
             if (badgeEl) badgeEl.style.display = "inline-flex";
             if (logoutEl) logoutEl.style.display = "inline-flex";
+            if (settingsEl) {
+                settingsEl.style.display = payload.role === "admin" ? "inline-flex" : "none";
+            }
             
             const roleName = payload.role.charAt(0).toUpperCase() + payload.role.slice(1);
             if (roleTextEl) roleTextEl.textContent = roleName;
@@ -959,8 +963,10 @@ function updateAuthUI() {
     } else {
         if (badgeEl) badgeEl.style.display = "none";
         if (logoutEl) logoutEl.style.display = "none";
+        if (settingsEl) settingsEl.style.display = "none";
     }
 }
+
 
 function initLogout() {
     const logoutBtn = document.getElementById("logout-btn");
@@ -971,4 +977,666 @@ function initLogout() {
         });
     }
 }
+
+
+// =====================================================================
+// SEMANTIC CONFIGURATOR DRAWER CONTROLLER
+// =====================================================================
+let activeConfig = null;
+let dbMetadata = {};
+
+const settingsOverlay = document.getElementById("settings-overlay");
+const settingsToggleBtn = document.getElementById("settings-toggle-btn");
+const closeSettingsBtn = document.getElementById("close-settings-btn");
+const saveSettingsBtn = document.getElementById("save-settings-btn");
+const settingsStatusMsg = document.getElementById("settings-status-msg");
+
+// Initialize Settings toggle events
+if (settingsToggleBtn) {
+    settingsToggleBtn.addEventListener("click", () => {
+        openSettingsDrawer();
+    });
+}
+
+if (closeSettingsBtn) {
+    closeSettingsBtn.addEventListener("click", () => {
+        settingsOverlay.style.display = "none";
+    });
+}
+
+// Close drawer if clicking outer overlay boundary
+if (settingsOverlay) {
+    settingsOverlay.addEventListener("click", (e) => {
+        if (e.target === settingsOverlay) {
+            settingsOverlay.style.display = "none";
+        }
+    });
+}
+
+// Initialize Configurator Tabs Switching
+const tabButtons = document.querySelectorAll(".settings-tab-btn");
+tabButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+        tabButtons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        
+        const tabId = btn.getAttribute("data-tab");
+        const tabContents = document.querySelectorAll(".settings-tab-content");
+        tabContents.forEach(content => {
+            content.classList.remove("active");
+            if (content.id === tabId) {
+                content.classList.add("active");
+            }
+        });
+    });
+});
+
+async function openSettingsDrawer() {
+    settingsOverlay.style.display = "flex";
+    settingsStatusMsg.style.display = "none";
+    
+    // Clear dynamic containers with a loader indicator
+    document.getElementById("entities-list").innerHTML = `<div style="text-align:center; padding:32px; color:var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin fa-lg"></i> Loading configurations...</div>`;
+    document.getElementById("relationships-list").innerHTML = "";
+    document.getElementById("metrics-list").innerHTML = "";
+    document.getElementById("policies-container").innerHTML = "";
+
+    try {
+        const response = await fetch(`${API_BASE}/config/semantic-layer`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data.success) {
+            activeConfig = data.config;
+            dbMetadata = data.db_metadata;
+            
+            renderEntities(activeConfig.entities);
+            renderRelationships(activeConfig.relationships);
+            renderMetrics(activeConfig.metrics);
+            renderPolicies(activeConfig.security_policies);
+        } else {
+            alert("Failed to retrieve configurator configurations: " + (data.error || "Unknown error"));
+        }
+    } catch (err) {
+        console.error("Failed to load settings:", err);
+        document.getElementById("entities-list").innerHTML = `<div style="color:var(--error); padding:16px; text-align:center;"><i class="fa-solid fa-triangle-exclamation"></i> Error: ${err.message}. Admin authorization required.</div>`;
+    }
+}
+
+// Helper to populate select dropdowns with tables list
+function getTableOptionsHTML(selectedTable = "") {
+    let html = `<option value="">-- Select Table --</option>`;
+    Object.keys(dbMetadata).forEach(tbl => {
+        html += `<option value="${tbl}" ${tbl === selectedTable ? "selected" : ""}>${tbl}</option>`;
+    });
+    return html;
+}
+
+// Helper to populate select dropdowns with columns list of a specific table
+function getColumnOptionsHTML(tableName, selectedColumn = "") {
+    let html = `<option value="">-- Select Column --</option>`;
+    if (tableName && dbMetadata[tableName]) {
+        dbMetadata[tableName].forEach(col => {
+            html += `<option value="${col}" ${col === selectedColumn ? "selected" : ""}>${col}</option>`;
+        });
+    }
+    return html;
+}
+
+// Helper to populate select dropdowns with entities list
+function getEntityOptionsHTML(selectedEntity = "") {
+    let html = `<option value="">-- Select Entity --</option>`;
+    if (activeConfig && activeConfig.entities) {
+        Object.keys(activeConfig.entities).forEach(ent => {
+            html += `<option value="${ent}" ${ent === selectedEntity ? "selected" : ""}>${ent}</option>`;
+        });
+    }
+    return html;
+}
+
+// ---------------------------------------------------------------------
+// 1. ENTITIES TAB MAPPINGS
+// ---------------------------------------------------------------------
+function renderEntities(entities) {
+    const listEl = document.getElementById("entities-list");
+    listEl.innerHTML = "";
+    
+    Object.entries(entities).forEach(([entName, entVal]) => {
+        createEntityCard(entName, entVal);
+    });
+}
+
+function createEntityCard(name = "", data = { table_name: "", primary_key: "", description: "", fields: {} }) {
+    const listEl = document.getElementById("entities-list");
+    const cardId = "ent-card-" + Date.now() + Math.random().toString(36).substr(2, 5);
+    
+    const card = document.createElement("div");
+    card.className = "config-card entity-card";
+    card.id = cardId;
+    
+    card.innerHTML = `
+        <div class="config-card-header">
+            <div class="form-group" style="flex: 1; margin-right: 12px;">
+                <input type="text" class="form-input entity-logical-name" placeholder="Entity Name (e.g. Patient)" value="${name}" style="font-weight: 600; font-size: 0.95rem; border-color: rgba(255,255,255,0.1);" />
+            </div>
+            <button class="delete-card-btn" title="Delete Entity" onclick="this.closest('.config-card').remove();"><i class="fa-solid fa-trash-can"></i></button>
+        </div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Physical Database Table</label>
+                <select class="form-select entity-table-select">
+                    ${getTableOptionsHTML(data.table_name)}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Primary Key</label>
+                <select class="form-select entity-pk-select">
+                    ${getColumnOptionsHTML(data.table_name, data.primary_key)}
+                </select>
+            </div>
+            <div class="form-group full-width">
+                <label>Description</label>
+                <textarea class="form-textarea entity-description" rows="2" placeholder="Describe this entity...">${data.description || ""}</textarea>
+            </div>
+        </div>
+        
+        <div class="fields-editor">
+            <div class="fields-editor-header">
+                <span>Field Mappings (Logical -> Physical)</span>
+                <button class="action-btn" style="padding: 2px 6px; font-size: 0.7rem;" onclick="addFieldRow('${cardId}')"><i class="fa-solid fa-plus"></i> Add Field</button>
+            </div>
+            <div class="fields-rows-container">
+                <!-- Field mappings added here -->
+            </div>
+        </div>
+    `;
+    
+    listEl.appendChild(card);
+    
+    // Wire table select trigger to reload columns drop-downs
+    const tblSelect = card.querySelector(".entity-table-select");
+    const pkSelect = card.querySelector(".entity-pk-select");
+    
+    tblSelect.addEventListener("change", () => {
+        const tbl = tblSelect.value;
+        pkSelect.innerHTML = getColumnOptionsHTML(tbl);
+        
+        // Update all fields rows column selectors for this entity card
+        const colSelects = card.querySelectorAll(".field-column-select");
+        colSelects.forEach(sel => {
+            const currentVal = sel.value;
+            sel.innerHTML = getColumnOptionsHTML(tbl, currentVal);
+        });
+    });
+    
+    // Add existing field rows
+    Object.entries(data.fields).forEach(([fKey, fVal]) => {
+        let colName = fVal;
+        let classification = "none";
+        if (typeof fVal === "object" && fVal !== null) {
+            colName = fVal.column_name;
+            classification = fVal.classification || "none";
+        }
+        addFieldRow(cardId, fKey, colName, classification);
+    });
+}
+
+function addFieldRow(cardId, logicalName = "", columnName = "", classification = "none") {
+    const card = document.getElementById(cardId);
+    const container = card.querySelector(".fields-rows-container");
+    const tbl = card.querySelector(".entity-table-select").value;
+    
+    const row = document.createElement("div");
+    row.className = "field-mapping-row";
+    row.style.marginTop = "6px";
+    
+    row.innerHTML = `
+        <input type="text" class="form-input field-logical-key" placeholder="logical_key" value="${logicalName}" style="font-size:0.8rem; padding: 6px 10px;" />
+        <select class="form-select field-column-select" style="font-size:0.8rem; padding: 6px 10px;">
+            ${getColumnOptionsHTML(tbl, columnName)}
+        </select>
+        <select class="form-select field-classification-select" style="font-size:0.8rem; padding: 6px 10px;">
+            <option value="none" ${classification === "none" ? "selected" : ""}>unclassified</option>
+            <option value="pii_name" ${classification === "pii_name" ? "selected" : ""}>pii_name</option>
+            <option value="pii_dob" ${classification === "pii_dob" ? "selected" : ""}>pii_dob</option>
+            <option value="pii_phone" ${classification === "pii_phone" ? "selected" : ""}>pii_phone</option>
+            <option value="pii_email" ${classification === "pii_email" ? "selected" : ""}>pii_email</option>
+            <option value="financial" ${classification === "financial" ? "selected" : ""}>financial</option>
+        </select>
+        <button class="remove-field-btn" onclick="this.closest('.field-mapping-row').remove();" title="Remove Field"><i class="fa-solid fa-xmark"></i></button>
+    `;
+    
+    container.appendChild(row);
+}
+
+// Add Entity button handler
+const addEntityBtn = document.getElementById("add-entity-btn");
+if (addEntityBtn) {
+    addEntityBtn.addEventListener("click", () => {
+        createEntityCard();
+    });
+}
+
+// ---------------------------------------------------------------------
+// 2. RELATIONSHIPS TAB JOINS
+// ---------------------------------------------------------------------
+function renderRelationships(relationships) {
+    const listEl = document.getElementById("relationships-list");
+    listEl.innerHTML = "";
+    relationships.forEach(rel => {
+        createRelationshipCard(rel);
+    });
+}
+
+function createRelationshipCard(rel = { from_entity: "", to_entity: "", join_keys: { from_key: "", to_key: "" }, join_type: "many_to_one" }) {
+    const listEl = document.getElementById("relationships-list");
+    const card = document.createElement("div");
+    card.className = "config-card relationship-card";
+    
+    card.innerHTML = `
+        <div class="config-card-header">
+            <span style="font-size: 0.85rem; font-weight: 600; color:var(--text-secondary);"><i class="fa-solid fa-link"></i> Table Join Condition</span>
+            <button class="delete-card-btn" title="Delete Join" onclick="this.closest('.config-card').remove();"><i class="fa-solid fa-trash-can"></i></button>
+        </div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>From Entity</label>
+                <select class="form-select rel-from-entity">
+                    ${getEntityOptionsHTML(rel.from_entity)}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>To Entity</label>
+                <select class="form-select rel-to-entity">
+                    ${getEntityOptionsHTML(rel.to_entity)}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>From Join Key</label>
+                <select class="form-select rel-from-key">
+                    <!-- Loaded dynamically -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label>To Join Key</label>
+                <select class="form-select rel-to-key">
+                    <!-- Loaded dynamically -->
+                </select>
+            </div>
+        </div>
+    `;
+    
+    listEl.appendChild(card);
+    
+    // Select Elements referencing inputs
+    const fromEntSelect = card.querySelector(".rel-from-entity");
+    const toEntSelect = card.querySelector(".rel-to-entity");
+    const fromKeySelect = card.querySelector(".rel-from-key");
+    const toKeySelect = card.querySelector(".rel-to-key");
+    
+    // Sync columns dropdowns on entities change
+    const syncJoinKeys = (selectEl, keySelectEl, selectedKey = "") => {
+        const entName = selectEl.value;
+        const entityDetails = getActiveEntityFormValues(entName);
+        const tbl = entityDetails ? entityDetails.table_name : "";
+        keySelectEl.innerHTML = getColumnOptionsHTML(tbl, selectedKey);
+    };
+    
+    // Wire change listeners
+    fromEntSelect.addEventListener("change", () => syncJoinKeys(fromEntSelect, fromKeySelect));
+    toEntSelect.addEventListener("change", () => syncJoinKeys(toEntSelect, toKeySelect));
+    
+    // Initial sync
+    syncJoinKeys(fromEntSelect, fromKeySelect, rel.join_keys.from_key);
+    syncJoinKeys(toEntSelect, toKeySelect, rel.join_keys.to_key);
+}
+
+// Collects helper to inspect current entity card values since they might not be saved in global state yet
+function getActiveEntityFormValues(entityName) {
+    const cards = document.querySelectorAll(".entity-card");
+    for (let card of cards) {
+        const nameVal = card.querySelector(".entity-logical-name").value.trim();
+        if (nameVal.toLowerCase() === entityName.toLowerCase()) {
+            return {
+                table_name: card.querySelector(".entity-table-select").value
+            };
+        }
+    }
+    // Fallback to activeConfig if not in DOM yet
+    if (activeConfig && activeConfig.entities[entityName]) {
+        return activeConfig.entities[entityName];
+    }
+    return null;
+}
+
+// Add Join button handler
+const addRelationshipBtn = document.getElementById("add-relationship-btn");
+if (addRelationshipBtn) {
+    addRelationshipBtn.addEventListener("click", () => {
+        createRelationshipCard();
+    });
+}
+
+// ---------------------------------------------------------------------
+// 3. METRICS TAB PREDEFINED METRICS
+// ---------------------------------------------------------------------
+function renderMetrics(metrics) {
+    const listEl = document.getElementById("metrics-list");
+    listEl.innerHTML = "";
+    Object.entries(metrics).forEach(([mName, mDetails]) => {
+        createMetricCard(mName, mDetails);
+    });
+}
+
+function createMetricCard(name = "", details = { description: "", formula: "" }) {
+    const listEl = document.getElementById("metrics-list");
+    const card = document.createElement("div");
+    card.className = "config-card metric-card";
+    
+    card.innerHTML = `
+        <div class="config-card-header">
+            <div class="form-group" style="flex:1; margin-right:12px;">
+                <input type="text" class="form-input metric-name" placeholder="Metric Name (e.g. Total Billings)" value="${name}" style="font-weight: 600; font-size: 0.9rem;" />
+            </div>
+            <button class="delete-card-btn" title="Delete Metric" onclick="this.closest('.config-card').remove();"><i class="fa-solid fa-trash-can"></i></button>
+        </div>
+        <div class="form-grid">
+            <div class="form-group full-width">
+                <label>Metric Formula / SQL Query</label>
+                <textarea class="form-textarea metric-formula" rows="2" style="font-family:'Fira Code', monospace; font-size:0.8rem;" placeholder="e.g. SELECT SUM(total_charges) FROM encounters">${details.formula || ""}</textarea>
+            </div>
+            <div class="form-group full-width">
+                <label>Description</label>
+                <input type="text" class="form-input metric-description" placeholder="Describe the calculation..." value="${details.description || ""}" />
+            </div>
+        </div>
+    `;
+    
+    listEl.appendChild(card);
+}
+
+const addMetricBtn = document.getElementById("add-metric-btn");
+if (addMetricBtn) {
+    addMetricBtn.addEventListener("click", () => {
+        createMetricCard();
+    });
+}
+
+// ---------------------------------------------------------------------
+// 4. POLICIES TAB RBAC/ABAC
+// ---------------------------------------------------------------------
+function renderPolicies(policies) {
+    const container = document.getElementById("policies-container");
+    container.innerHTML = "";
+    
+    // We render editors for each role in security policies except admin
+    Object.entries(policies.roles).forEach(([role, details]) => {
+        if (role === "admin") return;
+        
+        const card = document.createElement("div");
+        card.className = "config-card role-policy-card";
+        card.setAttribute("data-role", role);
+        
+        // Render Masking Rules list
+        const maskingRules = details.masking_rules || {};
+        const classifications = ["pii_name", "pii_dob", "pii_phone", "pii_email", "financial"];
+        
+        let maskingHtml = `<div class="form-grid" style="margin-top:8px;">`;
+        classifications.forEach(cls => {
+            const ruleValue = maskingRules[cls] || "none";
+            maskingHtml += `
+                <div class="form-group">
+                    <label style="text-transform: capitalize;">${cls.replace('_', ' ')} Mask Action</label>
+                    <select class="form-select policy-mask-select" data-classification="${cls}">
+                        <option value="none" ${ruleValue === "none" ? "selected" : ""}>no masking (cleartext)</option>
+                        <option value="mask_name" ${ruleValue === "mask_name" || (ruleValue === "mask" && cls === "pii_name") ? "selected" : ""}>mask_name (J*** D**)</option>
+                        <option value="mask_dob" ${ruleValue === "mask_dob" || (ruleValue === "mask" && cls === "pii_dob") ? "selected" : ""}>mask_dob (****-**-**)</option>
+                        <option value="mask_phone" ${ruleValue === "mask_phone" || (ruleValue === "mask" && cls === "pii_phone") ? "selected" : ""}>mask_phone (***-***-****)</option>
+                        <option value="mask_email" ${ruleValue === "mask_email" || (ruleValue === "mask" && cls === "pii_email") ? "selected" : ""}>mask_email (m***@***.com)</option>
+                        <option value="redact" ${ruleValue === "redact" ? "selected" : ""}>redact ([RESTRICTED])</option>
+                    </select>
+                </div>
+            `;
+        });
+        maskingHtml += `</div>`;
+        
+        // Render ABAC Policies list
+        const abacList = details.abac_policies || [];
+        const abacData = abacList[0] || { entity_context: "", attribute_match: { user_attribute: "", db_column: "" }, fallback_action: "mask" };
+        
+        card.innerHTML = `
+            <div class="config-card-header">
+                <span style="font-weight: 700; color: #a78bfa; font-size: 0.95rem; text-transform: uppercase;">
+                    <i class="fa-solid fa-user-shield"></i> Role: ${role}
+                </span>
+            </div>
+            
+            <h4 style="font-size:0.8rem; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:4px; margin-top:8px;">Column Classification Masking</h4>
+            ${maskingHtml}
+            
+            <h4 style="font-size:0.8rem; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:4px; margin-top:16px;">Attribute-Based Access Control (ABAC)</h4>
+            <div class="form-grid" style="margin-top:8px;">
+                <div class="form-group">
+                    <label>Restrict Entity Context</label>
+                    <select class="form-select abac-entity-select">
+                        ${getEntityOptionsHTML(abacData.entity_context)}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>User Token Attribute</label>
+                    <input type="text" class="form-input abac-user-attr" placeholder="e.g. department_id" value="${abacData.attribute_match.user_attribute}" />
+                </div>
+                <div class="form-group">
+                    <label>DB Column Comparison</label>
+                    <select class="form-select abac-db-col-select">
+                        <!-- Loaded dynamically -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>ABAC Fail Fallback Action</label>
+                    <select class="form-select abac-fallback-select">
+                        <option value="mask" ${abacData.fallback_action === "mask" ? "selected" : ""}>mask</option>
+                        <option value="redact" ${abacData.fallback_action === "redact" ? "selected" : ""}>redact</option>
+                    </select>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(card);
+        
+        const entSelect = card.querySelector(".abac-entity-select");
+        const dbColSelect = card.querySelector(".abac-db-col-select");
+        
+        const syncAbacColumns = (selectedCol = "") => {
+            const entName = entSelect.value;
+            const entityDetails = getActiveEntityFormValues(entName);
+            const tbl = entityDetails ? entityDetails.table_name : "";
+            dbColSelect.innerHTML = getColumnOptionsHTML(tbl, selectedCol);
+        };
+        
+        entSelect.addEventListener("change", () => syncAbacColumns());
+        syncAbacColumns(abacData.attribute_match.db_column);
+    });
+}
+
+// ---------------------------------------------------------------------
+// 5. SERIALIZE & SUBMIT DATA
+// ---------------------------------------------------------------------
+if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener("click", async () => {
+        saveSettingsBtn.disabled = true;
+        settingsStatusMsg.style.display = "inline";
+        settingsStatusMsg.style.color = "var(--text-secondary)";
+        settingsStatusMsg.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Saving...`;
+        
+        try {
+            const configPayload = serializeConfigForm();
+            
+            const response = await fetch(`${API_BASE}/config/semantic-layer`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify(configPayload)
+            });
+            
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || `HTTP ${response.status}`);
+            }
+            
+            settingsStatusMsg.style.color = "#4ADE80"; // success green
+            settingsStatusMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> Configurations saved & hot-reloaded!`;
+            
+            // Reload metadata in sidebar to reflect updates
+            fetchSchemaMetadata();
+            
+            setTimeout(() => {
+                settingsStatusMsg.style.display = "none";
+            }, 5000);
+        } catch (err) {
+            console.error("Failed to save settings configurations:", err);
+            settingsStatusMsg.style.color = "#FCA5A5"; // error red
+            settingsStatusMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Error: ${err.message}`;
+        } finally {
+            saveSettingsBtn.disabled = false;
+        }
+    });
+}
+
+function serializeConfigForm() {
+    const payload = {
+        version: activeConfig ? activeConfig.version : "1.0.0",
+        entities: {},
+        relationships: [],
+        metrics: {},
+        security_policies: {
+            roles: {
+                admin: { clearance: "unrestricted" }
+            }
+        }
+    };
+    
+    // 1. Serialize Entities
+    const entityCards = document.querySelectorAll(".entity-card");
+    entityCards.forEach(card => {
+        const name = card.querySelector(".entity-logical-name").value.trim();
+        if (!name) return;
+        
+        const table_name = card.querySelector(".entity-table-select").value;
+        const primary_key = card.querySelector(".entity-pk-select").value;
+        const description = card.querySelector(".entity-description").value.trim();
+        
+        const fields = {};
+        const fieldRows = card.querySelectorAll(".field-mapping-row");
+        fieldRows.forEach(row => {
+            const logicalKey = row.querySelector(".field-logical-key").value.trim();
+            const colSelectVal = row.querySelector(".field-column-select").value;
+            const classSelectVal = row.querySelector(".field-classification-select").value;
+            
+            if (!logicalKey || !colSelectVal) return;
+            
+            if (classSelectVal === "none") {
+                fields[logicalKey] = colSelectVal;
+            } else {
+                fields[logicalKey] = {
+                    column_name: colSelectVal,
+                    classification: classSelectVal
+                };
+            }
+        });
+        
+        payload.entities[name] = {
+            table_name,
+            primary_key,
+            description,
+            fields
+        };
+    });
+    
+    // 2. Serialize Relationships
+    const relationshipCards = document.querySelectorAll(".relationship-card");
+    relationshipCards.forEach(card => {
+        const from_entity = card.querySelector(".rel-from-entity").value;
+        const to_entity = card.querySelector(".rel-to-entity").value;
+        const from_key = card.querySelector(".rel-from-key").value;
+        const to_key = card.querySelector(".rel-to-key").value;
+        
+        if (!from_entity || !to_entity || !from_key || !to_key) return;
+        
+        payload.relationships.push({
+            from_entity,
+            to_entity,
+            join_type: "many_to_one",
+            join_keys: {
+                from_key,
+                to_key
+            }
+        });
+    });
+    
+    // 3. Serialize Metrics
+    const metricCards = document.querySelectorAll(".metric-card");
+    metricCards.forEach(card => {
+        const name = card.querySelector(".metric-name").value.trim();
+        const formula = card.querySelector(".metric-formula").value.trim();
+        const description = card.querySelector(".metric-description").value.trim();
+        
+        if (!name || !formula) return;
+        
+        payload.metrics[name] = {
+            description,
+            formula
+        };
+    });
+    
+    // 4. Serialize Policies
+    const roleCards = document.querySelectorAll(".role-policy-card");
+    roleCards.forEach(card => {
+        const role = card.getAttribute("data-role");
+        const masking_rules = {};
+        
+        // Serialize Masking Rules
+        const maskSelects = card.querySelectorAll(".policy-mask-select");
+        maskSelects.forEach(sel => {
+            const classification = sel.getAttribute("data-classification");
+            const ruleVal = sel.value;
+            if (ruleVal !== "none") {
+                masking_rules[classification] = ruleVal;
+            }
+        });
+        
+        // Serialize ABAC
+        const abac_policies = [];
+        const entVal = card.querySelector(".abac-entity-select").value;
+        const userAttr = card.querySelector(".abac-user-attr").value.trim();
+        const dbCol = card.querySelector(".abac-db-col-select").value;
+        const fallback = card.querySelector(".abac-fallback-select").value;
+        
+        if (entVal && userAttr && dbCol) {
+            abac_policies.push({
+                entity_context: entVal,
+                attribute_match: {
+                    user_attribute: userAttr,
+                    db_column: dbCol
+                },
+                fallback_action: fallback
+            });
+        }
+        
+        payload.security_policies.roles[role] = {
+            masking_rules,
+            abac_policies
+        };
+    });
+    
+    return payload;
+}
+
 

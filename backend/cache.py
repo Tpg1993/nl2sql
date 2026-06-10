@@ -23,6 +23,11 @@ class BaseCacheManager(ABC):
         """Remove a specific cache entry by its key hash."""
         pass
 
+    @abstractmethod
+    def clear(self) -> None:
+        """Clear all entries in the cache."""
+        pass
+
 
 class SQLiteCacheManager(BaseCacheManager):
     """A lightweight SQLite cache manager to persist natural language questions,
@@ -125,6 +130,16 @@ class SQLiteCacheManager(BaseCacheManager):
         except Exception as e:
             print(f"Error deleting cache row: {e}")
 
+    def clear(self) -> None:
+        """Clears all cached queries from the SQLite cache table."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("DELETE FROM query_cache")
+                conn.commit()
+                print("[Cache Clear] SQLite cache cleared.")
+        except Exception as e:
+            print(f"Error clearing SQLite cache: {e}")
+
 
 class RedisCacheManager(BaseCacheManager):
     """A Redis-backed cache manager for distributed production-grade caching."""
@@ -196,6 +211,16 @@ class RedisCacheManager(BaseCacheManager):
             self.client.delete(key)
         except Exception as e:
             print(f"Error deleting key from Redis cache: {e}")
+
+    def clear(self) -> None:
+        """Clears all cached queries from Redis matching the namespace."""
+        try:
+            keys = self.client.keys("nl2sql:cache:*")
+            if keys:
+                self.client.delete(*keys)
+                print(f"[Cache Clear] Cleared {len(keys)} keys from Redis.")
+        except Exception as e:
+            print(f"Error clearing Redis cache: {e}")
 
 
 def get_cache_manager(ttl_seconds: int = 3600) -> BaseCacheManager:
