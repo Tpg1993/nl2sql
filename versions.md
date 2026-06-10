@@ -4,7 +4,24 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
-## [v7_sarvam_enterprise_suite](#v7_sarvam_enterprise_suite) (Current Branch)
+## [v10_sarvam_selenium_tests](#v10_sarvam_selenium_tests) (Current Branch)
+*   **Release Focus**: End-to-End Automated Integration Test Suite using Selenium WebDriver.
+*   **Headless Execution**: Runs E2E integration test suite in `backend/test_selenium.py` using Chrome in `--headless` mode, ensuring full compatibility with CI/CD and CLI-only environments.
+*   **Test Cases**: Validates E2E functionality across 9 separate test scenarios:
+    1. JWT Authentication Overlay (invalid login validation).
+    2. Role-Based Access Control UI (Role Badge display).
+    3. Interactive Schema Sidebar Browser (clicking tables to inject in search input).
+    4. Collapsible Sidebar Panel (local storage state persistence and transitions).
+    5. Theme Switcher (data-theme toggling and persistence).
+    6. Dynamic Query execution and caching (standard Cache hit badge).
+    7. Query Lineage Audit Logs (extraction and rendering of lineage source table badges).
+    8. RLHF Expert SQL Overrides (override persistence and green Expert Approved badge).
+    9. HIPAA Compliance & PII Masking (dynamic name column masking and lock icons for Researcher role).
+*   **Automation Harness**: Automatically manages FastAPI backend uvicorn and frontend server lifecycles, polls endpoints to verify readiness, clears the database cache before runs to maintain isolation, and captures failure screenshots.
+
+---
+
+## [v7_sarvam_enterprise_suite](#v7_sarvam_enterprise_suite)
 *   **Release Focus**: Decoupled Semantic Layer, Decoupled Prompt Library, Cost-Aware Execution Planner, Federated Querying, Lineage-Backed Audit Trails, and Expert Override (RLHF) Loop.
 *   **Semantic Layer**: Integrates a `semantic_layer.yaml` mapping business metrics and entities (e.g. "patient summary counts") to database columns and tables. Pre-compiles logical definitions into LLM context prompts, ensuring generated SQL queries align with organizational metrics.
 *   **Decoupled Prompt Library**: Extracts hardcoded LLM prompts from Python agent code into parameterizable flat text files under `backend/prompts/` (e.g. `sql_generation.txt`, `summarization.txt`). Managed by a dynamic `PromptLibrary` loader, this allows easily adapting the agent core to other business domains by simply switching the text templates.

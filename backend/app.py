@@ -224,7 +224,8 @@ def apply_policy_masking(parsed_data, sql_query, user_context, agent):
 ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
 
 # Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address)
+is_testing = os.environ.get("TESTING", "false").lower() == "true"
+limiter = Limiter(key_func=get_remote_address, enabled=not is_testing)
 
 app = FastAPI(
     title="EHR SQL Agent API",
