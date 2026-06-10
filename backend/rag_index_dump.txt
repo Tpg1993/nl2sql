@@ -1,0 +1,329 @@
+=== METADATA RAG INDEXED DOCUMENTS ===
+This file shows the list of stemmed keywords indexed for each table.
+When you ask a question, the search engine matches query words to these keywords.
+
+Table: allergies
+----------------------------------------
+Unique Stemmed Keywords: ['active', 'allergen_name', 'allergen_type', 'allergy', 'allergy_id', 'as', 'created_at', 'currently', 'id', 'is_active', 'join', 'marked', 'note', 'noted', 'noted_date', 'patient', 'patient_id', 'reaction', 'represent', 'severity', 'verified', 'verified_at', 'verified_by']
+Term Frequencies (TF): {
+  "allergy": 4,
+  "allergy_id": 2,
+  "patient_id": 3,
+  "allergen_type": 1,
+  "allergen_name": 3,
+  "reaction": 1,
+  "severity": 3,
+  "noted_date": 1,
+  "is_active": 3,
+  "verified": 1,
+  "verified_by": 1,
+  "verified_at": 1,
+  "note": 1,
+  "created_at": 1,
+  "represent": 1,
+  "noted": 1,
+  "patient": 2,
+  "id": 1,
+  "active": 2,
+  "marked": 1,
+  "as": 1,
+  "currently": 1,
+  "join": 1
+}
+
+============================================================
+
+Table: departments
+----------------------------------------
+Unique Stemmed Keywords: ['code', 'cost_center', 'created_at', 'department', 'department_code', 'department_id', 'department_name', 'email', 'encounter', 'facility', 'head_provider_id', 'id', 'is_active', 'join', 'location', 'medical', 'name', 'phone', 'provider', 'represent', 'unit', 'updated_at']
+Term Frequencies (TF): {
+  "department": 2,
+  "department_id": 2,
+  "department_code": 2,
+  "department_name": 2,
+  "location": 3,
+  "cost_center": 3,
+  "phone": 1,
+  "email": 1,
+  "head_provider_id": 1,
+  "is_active": 1,
+  "created_at": 1,
+  "updated_at": 1,
+  "represent": 1,
+  "unit": 1,
+  "medical": 1,
+  "facility": 1,
+  "id": 1,
+  "code": 1,
+  "name": 1,
+  "join": 2,
+  "encounter": 1,
+  "provider": 1
+}
+
+============================================================
+
+Table: diagnoses
+----------------------------------------
+Unique Stemmed Keywords: ['created_at', 'diagnosis', 'diagnosis_id', 'diagnosis_name', 'diagnosis_type', 'during', 'encounter', 'encounter_id', 'icd10_code', 'id', 'is_chronic', 'is_confirmed', 'join', 'medical', 'name', 'note', 'onset_date', 'patient', 'patient_id', 'recorded', 'represent', 'severity', 'type']
+Term Frequencies (TF): {
+  "diagnosis": 2,
+  "diagnosis_id": 2,
+  "encounter_id": 3,
+  "patient_id": 3,
+  "icd10_code": 3,
+  "diagnosis_name": 2,
+  "diagnosis_type": 2,
+  "severity": 3,
+  "onset_date": 1,
+  "is_chronic": 3,
+  "is_confirmed": 1,
+  "note": 1,
+  "created_at": 1,
+  "represent": 1,
+  "medical": 1,
+  "recorded": 1,
+  "during": 1,
+  "encounter": 2,
+  "id": 1,
+  "name": 1,
+  "type": 1,
+  "join": 2,
+  "patient": 1
+}
+
+============================================================
+
+Table: encounters
+----------------------------------------
+Unique Stemmed Keywords: ['admission', 'admission_date', 'admission_dt', 'billed', 'charge', 'chief_complaint', 'count', 'created_at', 'department', 'department_id', 'diagnosis', 'discharge_date', 'discharge_dt', 'encounter', 'encounter_id', 'encounter_status', 'encounter_type', 'financial', 'id', 'insurance_plan', 'join', 'patient', 'patient_id', 'payment_status', 'provider', 'provider_id', 'referral_source', 'represent', 'status', 'sum', 'total', 'total_charge', 'triage_level', 'type', 'visit']
+Term Frequencies (TF): {
+  "encounter": 2,
+  "encounter_id": 2,
+  "patient_id": 3,
+  "provider_id": 3,
+  "department_id": 3,
+  "encounter_type": 2,
+  "encounter_status": 2,
+  "admission_dt": 2,
+  "discharge_dt": 2,
+  "chief_complaint": 3,
+  "triage_level": 1,
+  "referral_source": 1,
+  "insurance_plan": 1,
+  "total_charge": 2,
+  "payment_status": 3,
+  "created_at": 1,
+  "represent": 1,
+  "patient": 4,
+  "visit": 1,
+  "admission": 3,
+  "id": 1,
+  "type": 1,
+  "status": 1,
+  "admission_date": 1,
+  "discharge_date": 1,
+  "charge": 3,
+  "financial": 1,
+  "total": 4,
+  "count": 1,
+  "sum": 1,
+  "billed": 1,
+  "join": 4,
+  "provider": 1,
+  "department": 1,
+  "diagnosis": 1
+}
+
+============================================================
+
+Table: lab_orders
+----------------------------------------
+Unique Stemmed Keywords: ['clinical_note', 'created_at', 'encounter_id', 'external_order_ref', 'fasting_required', 'lab_name', 'lab_order', 'lab_order_id', 'lab_panel', 'order_status', 'ordered_at', 'patient_id', 'priority', 'provider_id', 'specimen_type']
+Term Frequencies (TF): {
+  "lab_order": 1,
+  "lab_order_id": 1,
+  "encounter_id": 1,
+  "patient_id": 1,
+  "provider_id": 1,
+  "ordered_at": 1,
+  "priority": 1,
+  "specimen_type": 1,
+  "lab_panel": 1,
+  "lab_name": 1,
+  "order_status": 1,
+  "fasting_required": 1,
+  "clinical_note": 1,
+  "external_order_ref": 1,
+  "created_at": 1
+}
+
+============================================================
+
+Table: lab_results
+----------------------------------------
+Unique Stemmed Keywords: ['abnormal_flag', 'created_at', 'encounter_id', 'lab_order_id', 'lab_result', 'lab_result_id', 'patient_id', 'ref_high', 'ref_low', 'result_status', 'result_text', 'result_value', 'test_code', 'test_name', 'unit', 'verified_at', 'verified_by']
+Term Frequencies (TF): {
+  "lab_result": 1,
+  "lab_result_id": 1,
+  "lab_order_id": 1,
+  "patient_id": 1,
+  "encounter_id": 1,
+  "test_code": 1,
+  "test_name": 1,
+  "result_value": 1,
+  "result_text": 1,
+  "unit": 1,
+  "ref_low": 1,
+  "ref_high": 1,
+  "abnormal_flag": 1,
+  "result_status": 1,
+  "verified_by": 1,
+  "verified_at": 1,
+  "created_at": 1
+}
+
+============================================================
+
+Table: medications
+----------------------------------------
+Unique Stemmed Keywords: ['active', 'actively', 'adherence_level', 'class', 'created_at', 'currently', 'dose', 'drug_class', 'drug_name', 'encounter_id', 'end_date', 'frequency', 'id', 'indication', 'is_active', 'join', 'medication', 'medication_id', 'name', 'note', 'patient', 'patient_id', 'prescribed', 'provider_id', 'represent', 'route', 'start_date']
+Term Frequencies (TF): {
+  "medication": 4,
+  "medication_id": 2,
+  "patient_id": 3,
+  "encounter_id": 3,
+  "provider_id": 3,
+  "drug_name": 2,
+  "drug_class": 2,
+  "dose": 3,
+  "route": 1,
+  "frequency": 1,
+  "start_date": 1,
+  "end_date": 1,
+  "is_active": 3,
+  "indication": 1,
+  "adherence_level": 1,
+  "note": 1,
+  "created_at": 1,
+  "represent": 1,
+  "prescribed": 2,
+  "patient": 3,
+  "id": 1,
+  "name": 1,
+  "class": 1,
+  "active": 1,
+  "currently": 1,
+  "actively": 1,
+  "join": 1
+}
+
+============================================================
+
+Table: patients
+----------------------------------------
+Unique Stemmed Keywords: ['address_line1', 'allergy', 'birth_date', 'blood_group', 'city', 'created_at', 'demographic', 'detail', 'diagnosis', 'dob', 'email', 'encounter', 'full_name', 'gender', 'id', 'join', 'marital_status', 'medication', 'mrn', 'name', 'number', 'patient', 'patient_id', 'phone', 'pii_dob', 'pii_email', 'pii_name', 'pii_phone', 'pincode', 'primary_language', 'registered', 'represent', 'state', 'their', 'total', 'vital']
+Term Frequencies (TF): {
+  "patient": 4,
+  "patient_id": 2,
+  "mrn": 3,
+  "full_name": 2,
+  "gender": 3,
+  "dob": 2,
+  "phone": 3,
+  "email": 3,
+  "address_line1": 1,
+  "city": 3,
+  "state": 3,
+  "pincode": 1,
+  "blood_group": 3,
+  "marital_status": 3,
+  "primary_language": 1,
+  "created_at": 1,
+  "represent": 1,
+  "registered": 2,
+  "their": 1,
+  "demographic": 1,
+  "detail": 1,
+  "id": 1,
+  "name": 1,
+  "pii_name": 1,
+  "birth_date": 1,
+  "pii_dob": 1,
+  "pii_phone": 1,
+  "pii_email": 1,
+  "total": 2,
+  "number": 1,
+  "join": 5,
+  "encounter": 1,
+  "diagnosis": 1,
+  "medication": 1,
+  "allergy": 1,
+  "vital": 1
+}
+
+============================================================
+
+Table: providers
+----------------------------------------
+Unique Stemmed Keywords: ['code', 'created_at', 'department', 'department_id', 'doctor', 'email', 'employment_type', 'encounter', 'full_name', 'gender', 'healthcare', 'id', 'is_active', 'join', 'license_number', 'name', 'phone', 'provider', 'provider_code', 'provider_id', 'represent', 'specialty', 'updated_at', 'years_experience']
+Term Frequencies (TF): {
+  "provider": 2,
+  "provider_id": 2,
+  "provider_code": 2,
+  "full_name": 2,
+  "gender": 3,
+  "specialty": 3,
+  "department_id": 3,
+  "phone": 1,
+  "email": 1,
+  "license_number": 1,
+  "years_experience": 3,
+  "employment_type": 1,
+  "is_active": 1,
+  "created_at": 1,
+  "updated_at": 1,
+  "represent": 1,
+  "healthcare": 1,
+  "doctor": 1,
+  "id": 1,
+  "code": 1,
+  "name": 1,
+  "join": 2,
+  "encounter": 1,
+  "department": 1
+}
+
+============================================================
+
+Table: vitals
+----------------------------------------
+Unique Stemmed Keywords: ['bmi', 'created_at', 'dbp', 'encounter_id', 'heart_rate', 'height_cm', 'id', 'join', 'measured_at', 'metric', 'pain_score', 'patient', 'patient_id', 'recorded', 'represent', 'resp_rate', 'sbp', 'spo2', 'temperature', 'temperature_c', 'vital', 'vital_id', 'weight_kg']
+Term Frequencies (TF): {
+  "vital": 2,
+  "vital_id": 2,
+  "encounter_id": 3,
+  "patient_id": 3,
+  "measured_at": 1,
+  "sbp": 3,
+  "dbp": 3,
+  "heart_rate": 3,
+  "resp_rate": 1,
+  "temperature_c": 2,
+  "spo2": 3,
+  "height_cm": 3,
+  "weight_kg": 3,
+  "bmi": 3,
+  "pain_score": 1,
+  "created_at": 1,
+  "represent": 1,
+  "recorded": 1,
+  "patient": 2,
+  "metric": 1,
+  "id": 1,
+  "temperature": 1,
+  "join": 1
+}
+
+============================================================
+
