@@ -526,6 +526,153 @@ def update_semantic_layer_config(payload: SemanticLayerConfigPayload, current_us
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class TestMetricPayload(BaseModel):
+    formula: str
+
+
+@app.post("/api/config/test-metric")
+def test_metric_formula(payload: TestMetricPayload, current_user: dict = Depends(get_current_user)):
+    """Dry-runs a metric SQL formula against the active database connection to verify syntax."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Only Administrators can test metric queries."
+        )
+    if not agent:
+        raise HTTPException(status_code=500, detail="Database agent is not initialized.")
+        
+    formula = payload.formula.strip()
+    if not formula:
+        raise HTTPException(status_code=400, detail="Metric formula cannot be empty.")
+        
+    try:
+        from sqlalchemy import text
+        with agent.engine.connect() as conn:
+            try:
+                # Try EXPLAIN first
+                conn.execute(text(f"EXPLAIN {formula}"))
+            except Exception:
+                # Fallback to SELECT * FROM (<formula>) LIMIT 0
+                conn.execute(text(f"SELECT * FROM ({formula}) LIMIT 0"))
+        return {"success": True, "message": "Metric formula query compiled successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/config/discover")
+def discover_schema_config(current_user: dict = Depends(get_current_user)):
+    """Inspects the active database schema to auto-discover entities, fields, classifications, and joins."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Only Administrators can auto-discover database schema mappings."
+        )
+    if not agent:
+        raise HTTPException(status_code=500, detail="Database agent is not initialized.")
+        
+    try:
+        inspector = inspect(agent.engine)
+        discovered_entities = {}
+        discovered_relationships = []
+        
+        def clean_entity_name(tbl: str) -> str:
+            name = tbl.lower()
+            if name.endswith("ies"):
+                name = name[:-3] + "y"
+            elif name.endswith("ses"):
+                name = name[:-2] + "is"  # e.g., diagnoses -> diagnosis
+            elif name.endswith("es") and not name.endswith("ces"):
+                name = name[:-2]
+            elif name.endswith("s") and not name.endswith("ss"):
+                name = name[:-1]
+            return "".join(part.capitalize() for part in name.split("_"))
+            
+        # 1. Discover Entities & Fields
+        for table_name in agent.db.get_usable_table_names():
+            ent_name = clean_entity_name(table_name)
+            
+            # Fetch columns and types
+            cols_info = inspector.get_columns(table_name)
+            
+            # Guess Primary Key
+            pk_info = inspector.get_pk_constraint(table_name)
+            pk_cols = pk_info.get("constrained_columns", [])
+            primary_key = pk_cols[0] if pk_cols else ""
+            
+            if not primary_key:
+                col_names_lower = [c["name"].lower() for c in cols_info]
+                if "id" in col_names_lower:
+                    primary_key = cols_info[col_names_lower.index("id")]["name"]
+                else:
+                    for col in cols_info:
+                        cname = col["name"].lower()
+                        if cname.endswith("_id") or cname == f"{table_name.rstrip('s').lower()}_id":
+                            primary_key = col["name"]
+                            break
+            
+            fields = {}
+            for col in cols_info:
+                cname = col["name"]
+                cname_lower = cname.lower()
+                
+                # Guess classification
+                classification = "none"
+                if "name" in cname_lower:
+                    classification = "pii_name"
+                elif "dob" in cname_lower or "birth" in cname_lower:
+                    classification = "pii_dob"
+                elif "phone" in cname_lower or "cell" in cname_lower or "mobile" in cname_lower:
+                    classification = "pii_phone"
+                elif "email" in cname_lower or "mail" in cname_lower:
+                    classification = "pii_email"
+                elif any(kw in cname_lower for kw in ["charge", "cost", "amount", "price", "fee"]):
+                    classification = "financial"
+                    
+                logical_f = "".join(part if idx == 0 else part.capitalize() for idx, part in enumerate(cname.split("_")))
+                
+                if classification == "none":
+                    fields[logical_f] = cname
+                else:
+                    fields[logical_f] = {
+                        "column_name": cname,
+                        "classification": classification
+                    }
+                    
+            discovered_entities[ent_name] = {
+                "table_name": table_name,
+                "primary_key": primary_key,
+                "description": f"Auto-discovered mappings for physical table '{table_name}'.",
+                "fields": fields
+            }
+            
+            # 2. Discover Relationships via Foreign Keys
+            fkeys = inspector.get_foreign_keys(table_name)
+            for fk in fkeys:
+                ref_table = fk.get("referred_table")
+                constrained_cols = fk.get("constrained_columns", [])
+                referred_cols = fk.get("referred_columns", [])
+                
+                if constrained_cols and referred_cols and ref_table:
+                    discovered_relationships.append({
+                        "from_entity": ent_name,
+                        "to_entity": clean_entity_name(ref_table),
+                        "join_type": "many_to_one",
+                        "join_keys": {
+                            "from_key": constrained_cols[0],
+                            "to_key": referred_cols[0]
+                        }
+                    })
+        
+        return {
+            "success": True,
+            "entities": discovered_entities,
+            "relationships": discovered_relationships
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @app.get("/api/metadata")
 
 @limiter.limit("30/minute")

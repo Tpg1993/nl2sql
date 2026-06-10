@@ -1377,8 +1377,16 @@ function createMetricCard(name = "", details = { description: "", formula: "" })
         </div>
         <div class="form-grid">
             <div class="form-group full-width">
-                <label>Metric Formula / SQL Query</label>
-                <textarea class="form-textarea metric-formula" rows="2" style="font-family:'Fira Code', monospace; font-size:0.8rem;" placeholder="e.g. SELECT SUM(total_charges) FROM encounters">${details.formula || ""}</textarea>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <label style="margin-bottom:0;">Metric Formula / SQL Query</label>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="test-feedback-msg" style="font-size:0.75rem; font-weight:500; display:none;"></span>
+                        <button class="action-btn test-metric-btn" style="font-size:0.75rem; padding:3px 8px; border-radius:4px; background:rgba(167, 139, 250, 0.15); border-color:rgba(167, 139, 250, 0.3); color:#c084fc;">
+                            <i class="fa-solid fa-play"></i> Test Formula
+                        </button>
+                    </div>
+                </div>
+                <textarea class="form-textarea metric-formula" rows="2" style="font-family:'Fira Code', monospace; font-size:0.8rem; margin-top:2px;" placeholder="e.g. SELECT SUM(total_charges) FROM encounters">${details.formula || ""}</textarea>
             </div>
             <div class="form-group full-width">
                 <label>Description</label>
@@ -1388,6 +1396,51 @@ function createMetricCard(name = "", details = { description: "", formula: "" })
     `;
     
     listEl.appendChild(card);
+
+    const testBtn = card.querySelector(".test-metric-btn");
+    const feedbackMsg = card.querySelector(".test-feedback-msg");
+    const formulaTextarea = card.querySelector(".metric-formula");
+    
+    testBtn.addEventListener("click", async () => {
+        const formula = formulaTextarea.value.trim();
+        if (!formula) {
+            feedbackMsg.style.display = "inline";
+            feedbackMsg.style.color = "#FCA5A5";
+            feedbackMsg.innerHTML = "Formula is empty";
+            return;
+        }
+        
+        testBtn.disabled = true;
+        feedbackMsg.style.display = "inline";
+        feedbackMsg.style.color = "var(--text-secondary)";
+        feedbackMsg.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Testing...`;
+        
+        try {
+            const response = await fetch(`${API_BASE}/config/test-metric`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({ formula })
+            });
+            
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.detail || `HTTP ${response.status}`);
+            }
+            
+            feedbackMsg.style.color = "#4ADE80";
+            feedbackMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> Valid!`;
+        } catch (err) {
+            console.error("Metric test failed:", err);
+            feedbackMsg.style.color = "#FCA5A5";
+            const cleanErr = err.message.replace(/[\r\n]+/g, " ");
+            feedbackMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation" title="${cleanErr.replace(/"/g, '&quot;')}"></i> Invalid`;
+        } finally {
+            testBtn.disabled = false;
+        }
+    });
 }
 
 const addMetricBtn = document.getElementById("add-metric-btn");
@@ -1539,6 +1592,116 @@ if (saveSettingsBtn) {
         }
     });
 }
+
+// Auto-Discover Handler
+const discoverSchemaBtn = document.getElementById("discover-schema-btn");
+if (discoverSchemaBtn) {
+    discoverSchemaBtn.addEventListener("click", async () => {
+        if (!confirm("Auto-Discover will clear any unsaved Entity and Join changes in the form and reload from the active database. Proceed?")) {
+            return;
+        }
+        
+        discoverSchemaBtn.disabled = true;
+        const originalText = discoverSchemaBtn.innerHTML;
+        discoverSchemaBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Discovering...`;
+        
+        try {
+            const response = await fetch(`${API_BASE}/config/discover`, {
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || `HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            if (data.success) {
+                // Pre-populate configuration structures in the UI
+                renderEntities(data.entities);
+                renderRelationships(data.relationships);
+                
+                settingsStatusMsg.style.display = "inline";
+                settingsStatusMsg.style.color = "#4ADE80";
+                settingsStatusMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> Schemas discovered successfully! Please review metrics & policies before saving.`;
+                setTimeout(() => { settingsStatusMsg.style.display = "none"; }, 5000);
+            }
+        } catch (err) {
+            console.error("Auto-discovery failed:", err);
+            alert("Auto-discovery failed: " + err.message);
+        } finally {
+            discoverSchemaBtn.disabled = false;
+            discoverSchemaBtn.innerHTML = originalText;
+        }
+    });
+}
+
+// Export Config Handler
+const exportConfigBtn = document.getElementById("export-config-btn");
+if (exportConfigBtn) {
+    exportConfigBtn.addEventListener("click", () => {
+        try {
+            const configPayload = serializeConfigForm();
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(configPayload, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "semantic_layer_config.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        } catch (err) {
+            console.error("Export failed:", err);
+            alert("Failed to export configuration: " + err.message);
+        }
+    });
+}
+
+// Import Config Handler
+const importConfigBtn = document.getElementById("import-config-btn");
+const importConfigFile = document.getElementById("import-config-file");
+if (importConfigBtn && importConfigFile) {
+    importConfigBtn.addEventListener("click", () => {
+        importConfigFile.click();
+    });
+    
+    importConfigFile.addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const importedConfig = JSON.parse(e.target.result);
+                
+                // Basic validation checks
+                if (!importedConfig.entities || !importedConfig.relationships || !importedConfig.metrics || !importedConfig.security_policies) {
+                    throw new Error("Invalid format: Config file must contain entities, relationships, metrics, and security_policies fields.");
+                }
+                
+                activeConfig = importedConfig;
+                
+                // Render all form fields with imported data
+                renderEntities(activeConfig.entities);
+                renderRelationships(activeConfig.relationships);
+                renderMetrics(activeConfig.metrics);
+                renderPolicies(activeConfig.security_policies);
+                
+                settingsStatusMsg.style.display = "inline";
+                settingsStatusMsg.style.color = "#4ADE80";
+                settingsStatusMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> Configuration imported successfully! Click Save & Hot-Reload to apply.`;
+                setTimeout(() => { settingsStatusMsg.style.display = "none"; }, 5000);
+            } catch (err) {
+                console.error("Import failed:", err);
+                alert("Failed to import configuration: " + err.message);
+            } finally {
+                // Clear the file input selection so it triggers again on re-upload
+                importConfigFile.value = "";
+            }
+        };
+        reader.readAsText(file);
+    });
+}
+
 
 function serializeConfigForm() {
     const payload = {

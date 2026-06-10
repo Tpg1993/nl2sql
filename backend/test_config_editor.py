@@ -136,5 +136,61 @@ class TestConfigEditorAPI(unittest.TestCase):
         prompt = agent.semantic_layer.get_context_prompt()
         self.assertIn("Test Predefined Count", prompt)
 
+    def test_test_metric_forbidden(self):
+        """Testing metric formula must be blocked for non-admin users with 403."""
+        payload = {"formula": "SELECT COUNT(*) FROM encounters"}
+        response = self.client.post("/api/config/test-metric", json=payload, headers=self.doctor_headers)
+        self.assertEqual(response.status_code, 403)
+
+    def test_test_metric_success_and_failures(self):
+        """Admin testing valid and invalid metric formulas must return correct statuses."""
+        # 1. Valid formula
+        payload = {"formula": "SELECT COUNT(*) FROM encounters"}
+        response = self.client.post("/api/config/test-metric", json=payload, headers=self.admin_headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json().get("success"))
+
+        # 2. Invalid formula (typo in table name)
+        payload = {"formula": "SELECT COUNT(*) FROM non_existent_table"}
+        response = self.client.post("/api/config/test-metric", json=payload, headers=self.admin_headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("no such table", response.json().get("detail", "").lower())
+
+    def test_discover_forbidden(self):
+        """Auto-discovery must be blocked for non-admin users with 403."""
+        response = self.client.get("/api/config/discover", headers=self.doctor_headers)
+        self.assertEqual(response.status_code, 403)
+
+    def test_discover_success(self):
+        """Admin schema auto-discovery must successfully inspect SQLite tables and infer fields/joins."""
+        response = self.client.get("/api/config/discover", headers=self.admin_headers)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data.get("success"))
+        self.assertIn("entities", data)
+        self.assertIn("relationships", data)
+
+        # Inspect inferred Patient entity details
+        patient_ent = data["entities"].get("Patient")
+        self.assertIsNotNone(patient_ent)
+        self.assertEqual(patient_ent.get("table_name"), "patients")
+        self.assertEqual(patient_ent.get("primary_key"), "patient_id")
+        
+        # Check PII/Financial guesses
+        fields = patient_ent.get("fields", {})
+        self.assertIn("fullName", fields)
+        self.assertEqual(fields["fullName"].get("classification"), "pii_name")
+        self.assertIn("dob", fields) # dob -> dob logical name
+        self.assertEqual(fields["dob"].get("classification"), "pii_dob")
+
+        # Inspect join guesses
+        relationships = data["relationships"]
+        self.assertTrue(len(relationships) > 0)
+        has_encounter_patient_join = any(
+            rel["from_entity"] == "Encounter" and rel["to_entity"] == "Patient"
+            for rel in relationships
+        )
+        self.assertTrue(has_encounter_patient_join)
+
 if __name__ == "__main__":
     unittest.main()

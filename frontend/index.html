@@ -201,7 +201,12 @@
                     <div class="settings-tab-content active" id="tab-entities">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                             <h3>Entity Schema Mappings</h3>
-                            <button class="action-btn" id="add-entity-btn"><i class="fa-solid fa-plus"></i> Add Entity</button>
+                            <div style="display:flex; gap:8px;">
+                                <button class="action-btn" id="discover-schema-btn" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #4ade80;" title="Auto-discover database tables, columns, types, and foreign key joins">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Discover
+                                </button>
+                                <button class="action-btn" id="add-entity-btn"><i class="fa-solid fa-plus"></i> Add Entity</button>
+                            </div>
                         </div>
                         <div class="entities-list" id="entities-list">
                             <!-- Dynamic Entity Rows -->
@@ -240,11 +245,22 @@
                 </div>
             </div>
             
-            <div class="settings-footer">
-                <span id="settings-status-msg" style="display: none; font-size: 0.85rem; font-weight: 500;"></span>
-                <button class="save-settings-btn" id="save-settings-btn">
-                    <i class="fa-solid fa-floppy-disk"></i> Save & Hot-Reload
-                </button>
+            <div class="settings-footer" style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <button class="action-btn" id="export-config-btn" title="Export entire semantic layer configuration as a JSON file" style="background: rgba(255,255,255,0.05); font-size:0.8rem; padding:6px 10px;">
+                        <i class="fa-solid fa-download"></i> Export
+                    </button>
+                    <button class="action-btn" id="import-config-btn" title="Import semantic layer configuration from a JSON file" style="background: rgba(255,255,255,0.05); font-size:0.8rem; padding:6px 10px;">
+                        <i class="fa-solid fa-upload"></i> Import
+                    </button>
+                    <input type="file" id="import-config-file" style="display:none;" accept=".json" />
+                </div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <span id="settings-status-msg" style="display: none; font-size: 0.85rem; font-weight: 500;"></span>
+                    <button class="save-settings-btn" id="save-settings-btn">
+                        <i class="fa-solid fa-floppy-disk"></i> Save & Hot-Reload
+                    </button>
+                </div>
             </div>
         </div>
     </div>

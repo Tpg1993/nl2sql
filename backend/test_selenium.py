@@ -513,6 +513,18 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         )
         self.assertTrue(overlay.is_displayed(), "Settings drawer overlay should be visible after click.")
         self.log("-> SUCCESS: Opened Semantic Configurator drawer.")
+
+        # Test Auto-Discover button on default Entities tab
+        discover_btn = driver.find_element(By.ID, "discover-schema-btn")
+        discover_btn.click()
+        time.sleep(1)
+        alert = driver.switch_to.alert
+        alert.accept()
+        time.sleep(2)
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "settings-status-msg"), "discovered successfully")
+        )
+        self.log("-> SUCCESS: Verified Auto-Discover schema mapping.")
         
         # 4. Navigate to Metrics tab and verify content
         metrics_tab_btn = driver.find_element(By.XPATH, "//button[@data-tab='tab-metrics']")
@@ -542,6 +554,14 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         name_input.send_keys("Selenium Dynamic Metric")
         formula_textarea.send_keys("SELECT COUNT(*) FROM vitals")
         desc_input.send_keys("Metric compiled by Selenium E2E test suite")
+
+        # Test Formula validation check in UI
+        test_formula_btn = last_card.find_element(By.CLASS_NAME, "test-metric-btn")
+        test_formula_btn.click()
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.XPATH, "(//span[contains(@class, 'test-feedback-msg')])[last()]"), "Valid!")
+        )
+        self.log("-> SUCCESS: Verified metric SQL dry-run compiler check from UI.")
         
         # 7. Save and Hot-Reload
         save_btn = driver.find_element(By.ID, "save-settings-btn")
