@@ -24,3 +24,6 @@ test_query_2.py
 scratch/
 verify_api.py
 **/scratch/
+*.log
+backend/*.log
+frontend/*.log
