@@ -219,7 +219,7 @@ async function submitQuestion(question) {
         
         const data = await response.json();
         if (data.success) {
-            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries, data.is_expert_matched, data.lineage, data.estimated_cost, question);
+            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries, data.is_expert_matched, data.lineage, data.estimated_cost, question, data.retrieved_tables);
         } else {
             appendAssistantError(data.error || "An error occurred during query generation.");
         }
@@ -372,7 +372,7 @@ function highlightSQL(sql) {
 }
 
 // Append Assistant Success Response bubble (SQL, Table, and Tokens)
-function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null, model = "gpt-4o-mini", retries = 0, isExpertMatched = false, lineage = {}, estimatedCost = 0.0, questionText = "") {
+function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null, model = "gpt-4o-mini", retries = 0, isExpertMatched = false, lineage = {}, estimatedCost = 0.0, questionText = "", retrievedTables = []) {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
@@ -614,6 +614,14 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                                         <strong>${retries}</strong> ${retries > 0 ? '(Self-Healed SQL Syntax)' : '(Direct Compilation)'}
                                     </span>
                                 </div>
+                                ${retrievedTables && retrievedTables.length > 0 ? `
+                                <div class="meta-detail-item" style="grid-column: span 2;">
+                                    <span class="detail-label">RAG Schema Tables</span>
+                                    <span class="detail-value" style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;">
+                                        ${retrievedTables.map(t => `<span class="rag-table-badge" style="background: rgba(167, 139, 250, 0.15); color: #c084fc; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(167, 139, 250, 0.3); font-size: 0.75rem; font-family: monospace; font-weight: 600;"><i class="fa-solid fa-table" style="margin-right: 4px; font-size: 0.7rem;"></i>${t}</span>`).join('')}
+                                    </span>
+                                </div>
+                                ` : ''}
                             </div>
                         </div>
 

@@ -4,7 +4,16 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
-## [v10_sarvam_selenium_tests](#v10_sarvam_selenium_tests) (Current Branch)
+## [v11_sarvam_metadata_rag](#v11_sarvam_metadata_rag) (Current Branch)
+*   **Release Focus**: Metadata RAG & Large-Scale Schema Reflection.
+*   **Scalable Schema Reflection**: Replaces global listing and parsing of all database schemas with a dynamic `retrieve_schema_node` utilizing a custom `MetadataRAG` system. Ensures the agent scales gracefully to schemas with thousands of tables.
+*   **TF-IDF & Cosine Similarity Matcher**: Implements indexing of table names, columns, semantic entities, relationships, and metrics, combined with custom singular/plural stemming.
+*   **Relational Semantic Expansion**: Integrates graph-based boosting to automatically pull in connected parent/child tables (e.g. `patients`) when related tables (e.g. `medications`, `vitals`) score highly.
+*   **API & UI Integration**: Returns `retrieved_tables` list in query JSON responses (including cache hits/misses) and displays them as monospace purple badges under the Token & Latency Details panel.
+
+---
+
+## [v10_sarvam_selenium_tests](#v10_sarvam_selenium_tests)
 *   **Release Focus**: End-to-End Automated Integration Test Suite using Selenium WebDriver.
 *   **Headless Execution**: Runs E2E integration test suite in `backend/test_selenium.py` using Chrome in `--headless` mode, ensuring full compatibility with CI/CD and CLI-only environments.
 *   **Test Cases**: Validates E2E functionality across 9 separate test scenarios:

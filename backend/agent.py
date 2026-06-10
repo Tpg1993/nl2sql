@@ -27,6 +27,7 @@ class AgentState(MessagesState):
     estimated_cost: float
     lineage: Dict[str, Any]
     pii_params: Dict[str, str]
+    retrieved_tables: List[str]
 
 
 class EHRQueryAgent:
@@ -91,10 +92,12 @@ class EHRQueryAgent:
         from .planner import CostPlanner
         from .expert_overrides import ExpertOverrideStore
         from .prompts import PromptLibrary
+        from .metadata_rag import MetadataRAG
         self.semantic_layer = SemanticLayer()
         self.cost_planner = CostPlanner(self.engine)
         self.override_store = ExpertOverrideStore()
         self.prompt_library = PromptLibrary()
+        self.metadata_rag = MetadataRAG(self.engine)
 
         # Build and compile LangGraph state machine
         self.agent = self._compile_graph()
@@ -154,28 +157,29 @@ class EHRQueryAgent:
             temperature=0
         )
 
-    def list_tables_node(self, state: AgentState) -> Dict[str, Any]:
-        """Node 1: Fetch the available catalog tables."""
-        print("\n[Node 1] Fetching catalog tables...")
+    def retrieve_schema_node(self, state: AgentState) -> Dict[str, Any]:
+        """Node 1 & 2 (Combined): Retrieve relevant tables using Metadata RAG and fetch their schema specifications."""
+        print("\n[Node RAG] Performing semantic metadata retrieval...")
         start_time = time.perf_counter()
-        result = self.list_tables_tool.invoke("")
+        user_question = state["messages"][0].content
+        
+        # Call Metadata RAG to get relevant tables
+        retrieved_tables = self.metadata_rag.retrieve_tables(user_question, top_k=3)
+        print(f"-> RAG Retrieved Tables: {retrieved_tables}")
+        
+        # Build schema context for only these tables
+        table_names_str = ", ".join(retrieved_tables)
+        schema_result = self.get_schema_tool.invoke(table_names_str)
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
         
         latencies = state.get("latencies", {}).copy()
         latencies["schema"] = latencies.get("schema", 0.0) + elapsed_ms
-        return {"messages": [AIMessage(content=result)], "latencies": latencies}
-
-    def get_schema_node(self, state: AgentState) -> Dict[str, Any]:
-        """Node 2: Read specifications/schemas for the tables."""
-        print("\n[Node 2] Reading schema specifications...")
-        start_time = time.perf_counter()
-        table_names = state["messages"][-1].content
-        result = self.get_schema_tool.invoke(table_names)
-        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
         
-        latencies = state.get("latencies", {}).copy()
-        latencies["schema"] = latencies.get("schema", 0.0) + elapsed_ms
-        return {"messages": [AIMessage(content=result)], "latencies": latencies}
+        return {
+            "messages": [AIMessage(content=schema_result)],
+            "latencies": latencies,
+            "retrieved_tables": retrieved_tables
+        }
 
     def generate_query_node(self, state: AgentState) -> Dict[str, Any]:
         """Node 3: Generate SQL query based on user question, DB schema, and semantic layer, taking error details on retry."""
@@ -202,7 +206,7 @@ class EHRQueryAgent:
                 db_schema = msg.content
                 break
         if not db_schema:
-            db_schema = state["messages"][2].content if len(state["messages"]) > 2 else ""
+            db_schema = state["messages"][1].content if len(state["messages"]) > 1 else ""
 
         # Identify previous execution errors for self-healing prompt injections
         retries = state.get("retries", 0)
@@ -508,16 +512,14 @@ class EHRQueryAgent:
         builder = StateGraph(AgentState)
         
         # Register nodes
-        builder.add_node("list_tables", self.list_tables_node)
-        builder.add_node("get_schema", self.get_schema_node)
+        builder.add_node("retrieve_schema", self.retrieve_schema_node)
         builder.add_node("generate_query", self.generate_query_node)
         builder.add_node("execute_query", self.execute_query_node)
         builder.add_node("summarize_results", self.summarize_results_node)
         
         # Configure transitions
-        builder.add_edge(START, "list_tables")
-        builder.add_edge("list_tables", "get_schema")
-        builder.add_edge("get_schema", "generate_query")
+        builder.add_edge(START, "retrieve_schema")
+        builder.add_edge("retrieve_schema", "generate_query")
         builder.add_edge("generate_query", "execute_query")
         
         # Set up retry conditional logic on execute query
@@ -545,7 +547,8 @@ class EHRQueryAgent:
                 "execution": 0.0,
                 "summarization": 0.0
             },
-            "pii_params": pii_params
+            "pii_params": pii_params,
+            "retrieved_tables": []
         }
         output = self.agent.invoke(initial_state)
         return output["messages"][-1].content
@@ -562,7 +565,8 @@ class EHRQueryAgent:
                 "execution": 0.0,
                 "summarization": 0.0
             },
-            "pii_params": pii_params
+            "pii_params": pii_params,
+            "retrieved_tables": []
         }
         output = self.agent.invoke(initial_state)
 
@@ -628,5 +632,6 @@ class EHRQueryAgent:
             "retries": output.get("retries", 0),
             "is_expert_matched": output.get("is_expert_matched", False),
             "lineage": output.get("lineage", {}),
-            "estimated_cost": output.get("estimated_cost", 0.0)
+            "estimated_cost": output.get("estimated_cost", 0.0),
+            "retrieved_tables": output.get("retrieved_tables", [])
         }
