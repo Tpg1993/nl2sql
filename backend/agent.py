@@ -2,6 +2,8 @@ import os
 import time
 import re
 import sqlite3
+import sqlglot
+import sqlglot.expressions as exp
 from typing import Any, Dict, List
 from sqlalchemy import create_engine
 from langchain_community.utilities import SQLDatabase
@@ -259,16 +261,50 @@ class EHRQueryAgent:
         return sql_no_doubles
 
     def audit_sql_query(self, sql_query: str) -> None:
-        """Audits the generated SQL query for dangerous write/schema alteration operations."""
-        DANGEROUS_KEYWORDS = [
-            "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", 
-            "REPLACE", "TRUNCATE", "GRANT", "REVOKE", "PRAGMA"
-        ]
-        cleaned_sql = self.strip_sql_literals(sql_query)
-        for kw in DANGEROUS_KEYWORDS:
-            pattern = r"\b" + kw + r"\b"
-            if re.search(pattern, cleaned_sql, re.IGNORECASE):
-                raise ValueError(f"Security violation: Disallowed SQL command keyword '{kw}' detected outside string literals.")
+        """Audits the generated SQL query for dangerous write/schema alteration operations using AST parsing."""
+        if not sql_query or not sql_query.strip():
+            return
+            
+        try:
+            # Determine read dialect based on connection engine if initialized
+            dialect = "sqlite"
+            if hasattr(self, "engine") and self.engine and self.engine.url.drivername.startswith("databricks"):
+                dialect = "databricks"
+                
+            parsed_expressions = sqlglot.parse(sql_query, read=dialect)
+        except Exception:
+            try:
+                # Fallback to generic SQL parsing if dialect-specific strictly fails
+                parsed_expressions = sqlglot.parse(sql_query)
+            except Exception as parse_err:
+                raise ValueError(f"Security violation: Failed to parse SQL query structure. Details: {parse_err}")
+                
+        # Define structural expressions that represent modification statements
+        MUTATION_EXPRESSIONS = (
+            exp.Insert,
+            exp.Update,
+            exp.Delete,
+            exp.Drop,
+            exp.AlterTable,
+            exp.AlterColumn,
+            exp.Create,
+            exp.TruncateTable,
+            exp.Command
+        )
+        
+        for expr in parsed_expressions:
+            if not expr:
+                continue
+            for node in expr.walk():
+                if isinstance(node, MUTATION_EXPRESSIONS):
+                    node_name = node.__class__.__name__.upper()
+                    raise ValueError(f"Security violation: Disallowed SQL command structure '{node_name}' detected.")
+                
+                # Check for generic SQL Commands that execute administrative scripts (e.g. PRAGMA, VACUUM)
+                if isinstance(node, exp.Command):
+                    cmd_name = str(node.this).upper()
+                    if cmd_name in ["PRAGMA", "VACUUM", "REPLACE"]:
+                        raise ValueError(f"Security violation: Disallowed SQL command keyword '{cmd_name}' detected.")
 
     def execute_query_node(self, state: AgentState) -> Dict[str, Any]:
         """Node 4: Execute SQL query on the database, with exception tracking for retry router."""

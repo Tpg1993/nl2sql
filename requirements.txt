@@ -4,3 +4,4 @@ langchain-openai==1.1.7
 langgraph==1.0.8
 SQLAlchemy==2.0.27
 python-dotenv==1.0.1
+sqlglot==25.5.0

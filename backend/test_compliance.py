@@ -99,5 +99,35 @@ class TestComplianceGuardrails(unittest.TestCase):
         self.assertIn("*", masked[1]["full_name"])
         self.assertEqual(masked[1]["total_charges"], "[RESTRICTED]")
 
+    def test_ast_safety_valid_complex_queries(self):
+        """Verifies that complex, valid read-only SQL queries parse and pass the safety checks successfully."""
+        valid_queries = [
+            "SELECT p.full_name, COUNT(e.encounter_id) FROM patients p LEFT JOIN encounters e ON p.patient_id = e.patient_id GROUP BY p.full_name",
+            "WITH dept_avg AS (SELECT department_id, AVG(total_charges) as avg_chg FROM encounters GROUP BY department_id) SELECT * FROM dept_avg WHERE avg_chg > 100",
+            "SELECT full_name, ROW_NUMBER() OVER (PARTITION BY gender ORDER BY dob) FROM patients"
+        ]
+        for sql in valid_queries:
+            try:
+                self.agent.audit_sql_query(sql)
+            except Exception as e:
+                self.fail(f"AST Safety parser rejected a valid read-only query: {sql}. Error: {e}")
+
+    def test_ast_safety_blocked_writes(self):
+        """Verifies that mutation commands (insert, update, delete, drop, alter, create) are successfully blocked."""
+        unsafe_queries = [
+            "DELETE FROM patients WHERE patient_id = 5",
+            "DROP TABLE encounters",
+            "INSERT INTO vitals (patient_id, sbp) VALUES (1, 120)",
+            "UPDATE patients SET full_name = 'Hacked'",
+            "ALTER TABLE encounters ADD COLUMN temp TEXT",
+            "CREATE TABLE hack (id INTEGER)",
+            "SELECT * FROM patients; DROP TABLE patients;",
+            "WITH hacked AS (SELECT * FROM patients) DELETE FROM encounters"
+        ]
+        for sql in unsafe_queries:
+            with self.assertRaises(ValueError) as context:
+                self.agent.audit_sql_query(sql)
+            self.assertIn("Security violation", str(context.exception))
+
 if __name__ == "__main__":
     unittest.main()

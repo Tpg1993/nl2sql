@@ -12,3 +12,4 @@ PyJWT==2.8.0
 slowapi==0.1.9
 PyYAML==6.0.1
 selenium==4.44.0
+sqlglot==25.5.0
