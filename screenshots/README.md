@@ -45,3 +45,13 @@ This folder contains the visual execution proof and user interface states for th
 * **Functionality**: The "Verify Ledger Integrity" button triggers a full SHA-256 hash chain traversal from genesis block to the latest record. Any tampering (direct DB edit) is cryptographically detected.
 * **Backend Proof**: `GET /api/config/verify-audit-ledger` returns `{"verified": true, "tampered_ids": [], "message": "Audit ledger integrity verified successfully."}` ✅
 * **Chain Architecture**: Each record's hash is computed as `SHA256(timestamp|username|role|prompt|sql|tables|columns|latency|dataset_hash|previous_hash)` creating a linked-list blockchain.
+
+## 10. Dynamic Few-Shot RAG Library Viewer
+* **Filename**: `10_Dynamic_Few_Shot_RAG_Query_Library.png`
+* **Functionality**: Integrates the few-shot query library browser directly inside the admin panel. Admins can visually inspect standard few-shot templates, matching scores, and target SQL statements used by the semantic selector.
+* **E2E Tests**: `backend/test_selenium.py` — verified using automated UI browser steps. ✅
+
+## 11. Dense Vector-based Metadata RAG Pruning
+* **Filename**: `11_Vector_Metadata_RAG_Pruning.png`
+* **Functionality**: Matches natural language queries to schemas using dense vector similarity scores. Matched tables are highlighted as purple monospace badges in the "Token & Latency Details" panel.
+* **Unit & E2E Tests**: Verified using automated tests (`test_tfidf_fallback_graceful_run` and `test_13_dynamic_few_shot_and_vector_rag_details_panel`). ✅

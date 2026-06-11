@@ -36,5 +36,13 @@ class TestMetadataRAG(unittest.TestCase):
         self.assertIn("allergies", tables)
         self.assertIn("patients", tables)
 
+    def test_tfidf_fallback_graceful_run(self):
+        # Temporarily clear embeddings to test local TF-IDF matching and relational expansion fallback paths
+        self.rag.embeddings = None
+        self.rag.table_embeddings = {}
+        tables = self.rag.retrieve_tables("Show patient vitals heart rate sbp", top_k=3)
+        self.assertIn("vitals", tables)
+        self.assertIn("patients", tables)
+
 if __name__ == "__main__":
     unittest.main()

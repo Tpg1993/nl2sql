@@ -22,7 +22,10 @@ class MetadataRAG:
             except Exception as e:
                 print(f"[MetadataRAG] Warning: failed to load semantic layer yaml: {e}")
                 
+        self.embeddings = None
+        self.table_embeddings = {}
         self.index = self._build_index()
+        self.init_embeddings()
 
     def _stem(self, word: str) -> str:
         word = word.lower()
@@ -111,7 +114,8 @@ class MetadataRAG:
             table_docs[table] = {
                 "tokens": tokens,
                 "tf": tf,
-                "length": len(tokens)
+                "length": len(tokens),
+                "full_text": full_text
             }
             
         # Compute Inverse Document Frequencies (IDF)
@@ -131,45 +135,90 @@ class MetadataRAG:
             "idf": idf
         }
 
-    def retrieve_tables(self, question: str, top_k: int = 3) -> List[str]:
-        q_tokens = self._tokenize(question)
-        if not q_tokens:
-            # Fallback to alphabetically sorted table subset
-            return sorted(list(self.index["docs"].keys()))[:top_k]
-            
-        # Compute TF-IDF for query
-        q_tf = {}
-        for token in q_tokens:
-            q_tf[token] = q_tf.get(token, 0) + 1
-            
-        q_tfidf = {}
-        for token, tf_val in q_tf.items():
-            if token in self.index["idf"]:
-                q_tfidf[token] = tf_val * self.index["idf"][token]
+    def init_embeddings(self) -> None:
+        """Initializes LangChain OpenAIEmbeddings and pre-calculates table schema vector embeddings."""
+        try:
+            openai_key = os.environ.get("OPENAI_API_KEY")
+            if openai_key:
+                from langchain_openai import OpenAIEmbeddings
+                self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
                 
-        q_mag = math.sqrt(sum(val ** 2 for val in q_tfidf.values()))
-        if q_mag == 0:
-            return sorted(list(self.index["docs"].keys()))[:top_k]
-            
-        # Calculate base cosine similarity with each table document
-        base_scores = {}
-        for table, doc in self.index["docs"].items():
-            dot_product = 0
-            doc_tfidf = {}
-            
-            for token, tf_val in doc["tf"].items():
-                doc_tfidf[token] = tf_val * self.index["idf"].get(token, 1.0)
+                # Precompute embeddings for all tables
+                tables = list(self.index["docs"].keys())
+                texts = [self.index["docs"][table].get("full_text", table) for table in tables]
                 
-            doc_mag = math.sqrt(sum(val ** 2 for val in doc_tfidf.values()))
-            
-            for token in q_tfidf:
-                if token in doc_tfidf:
-                    dot_product += q_tfidf[token] * doc_tfidf[token]
-                    
-            if doc_mag > 0:
-                base_scores[table] = dot_product / (q_mag * doc_mag)
+                embs = self.embeddings.embed_documents(texts)
+                self.table_embeddings = {}
+                for table, emb in zip(tables, embs):
+                    self.table_embeddings[table] = emb
+                print(f"[MetadataRAG] Precomputed dense vector embeddings for {len(self.table_embeddings)} tables.")
             else:
-                base_scores[table] = 0.0
+                print("[MetadataRAG] No OPENAI_API_KEY found. Defaulting to local TF-IDF Cosine similarity.")
+        except Exception as e:
+            print(f"[MetadataRAG] Warning: Embeddings initialization failed: {e}. Defaulting to TF-IDF.")
+            self.embeddings = None
+            self.table_embeddings = {}
+
+    def retrieve_tables(self, question: str, top_k: int = 3) -> List[str]:
+        # Try dense vector search first
+        base_scores = {}
+        vector_search_successful = False
+        
+        if self.embeddings and self.table_embeddings:
+            try:
+                q_emb = self.embeddings.embed_query(question)
+                
+                # Compute cosine similarity with cached table vectors
+                for table, emb in self.table_embeddings.items():
+                    dot = sum(a * b for a, b in zip(q_emb, emb))
+                    mag_a = math.sqrt(sum(a ** 2 for a in q_emb))
+                    mag_b = math.sqrt(sum(b ** 2 for b in emb))
+                    sim = dot / (mag_a * mag_b) if mag_a > 0 and mag_b > 0 else 0.0
+                    base_scores[table] = sim
+                vector_search_successful = True
+                print(f"[MetadataRAG] Vector similarity scores: {base_scores}")
+            except Exception as e:
+                print(f"[MetadataRAG] Warning: Vector search failed: {e}. Falling back to TF-IDF.")
+                base_scores = {}
+                
+        # If vector search is disabled or failed, fall back to TF-IDF
+        if not vector_search_successful:
+            q_tokens = self._tokenize(question)
+            if not q_tokens:
+                # Fallback to alphabetically sorted table subset
+                return sorted(list(self.index["docs"].keys()))[:top_k]
+                
+            # Compute TF-IDF for query
+            q_tf = {}
+            for token in q_tokens:
+                q_tf[token] = q_tf.get(token, 0) + 1
+                
+            q_tfidf = {}
+            for token, tf_val in q_tf.items():
+                if token in self.index["idf"]:
+                    q_tfidf[token] = tf_val * self.index["idf"][token]
+                    
+            q_mag = math.sqrt(sum(val ** 2 for val in q_tfidf.values()))
+            if q_mag == 0:
+                return sorted(list(self.index["docs"].keys()))[:top_k]
+                
+            for table, doc in self.index["docs"].items():
+                dot_product = 0
+                doc_tfidf = {}
+                
+                for token, tf_val in doc["tf"].items():
+                    doc_tfidf[token] = tf_val * self.index["idf"].get(token, 1.0)
+                    
+                doc_mag = math.sqrt(sum(val ** 2 for val in doc_tfidf.values()))
+                
+                for token in q_tfidf:
+                    if token in doc_tfidf:
+                        dot_product += q_tfidf[token] * doc_tfidf[token]
+                        
+                if doc_mag > 0:
+                    base_scores[table] = dot_product / (q_mag * doc_mag)
+                else:
+                    base_scores[table] = 0.0
 
         # Apply Relational Semantic Expansion / Graph-based Metadata Boosting
         scores = base_scores.copy()

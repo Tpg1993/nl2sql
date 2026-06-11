@@ -825,6 +825,62 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
+    def test_13_dynamic_few_shot_and_vector_rag_details_panel(self):
+        self.log("[Test 13] Testing Dynamic Few-Shot RAG matches and Table Reflection badge rendering in UI...")
+        driver = self.driver
+        self.login("admin", ADMIN_PASSWORD)
+        
+        # Wait for connected
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # Submit clinical query that triggers few-shot matching and schema reflection
+        input_box = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.ID, "user-input"))
+        )
+        input_box.clear()
+        input_box.send_keys("Find all patients who have active allergies")
+        
+        send_btn = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.ID, "send-button"))
+        )
+        send_btn.click()
+        
+        # Wait for results to render (FastAPI and LLM processing)
+        time.sleep(8)
+        
+        # Verify result table is shown
+        result_table = WebDriverWait(driver, 45).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+        )
+        self.assertTrue(result_table.is_displayed())
+        
+        # Click the collapsible 'Token & Latency Details' summary element
+        token_details_summary = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".token-details summary"))
+        )
+        # Scroll summary into view and click
+        driver.execute_script("arguments[0].scrollIntoView(true);", token_details_summary)
+        time.sleep(1)
+        token_details_summary.click()
+        time.sleep(1)
+        
+        # Verify RAG table badges are rendered
+        rag_table_badges = driver.find_elements(By.CLASS_NAME, "rag-table-badge")
+        self.assertGreater(len(rag_table_badges), 0, "At least one RAG table badge should be displayed.")
+        
+        # Verify retrieved few-shot example cards are rendered
+        few_shot_cards = driver.find_elements(By.CLASS_NAME, "few-shot-example-card")
+        self.assertGreater(len(few_shot_cards), 0, "Retrieved few-shot example cards should be displayed.")
+        
+        first_card_text = few_shot_cards[0].text
+        self.assertIn("allergies", first_card_text.lower())
+        self.log("-> SUCCESS: Dynamic few-shot examples and RAG table badges verified successfully in UI details panel.")
+        
+        self._test_has_failed = False
+        self.logout()
+
 if __name__ == "__main__":
     unittest.main()
 

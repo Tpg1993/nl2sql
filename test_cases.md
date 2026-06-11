@@ -184,3 +184,26 @@ These queries verify the multi-layered security controls, application pre-execut
 *   **Question**: Any write query that escapes the auditor layer (for example, mocked bypass testing).
 *   **Expected Behavior**: SQLite connections created with `mode=ro` connections block execution and return an engine-level error: `attempt to write a readonly database`. The agent catches this, marks it as a security violation, and routes directly to the static guardrail message.
 *   **Why it tests**: Verifies engine-level connection sandboxing.
+
+---
+
+## 6. Dense Vector-Based Metadata RAG & Dynamic Few-Shot RAG
+
+These queries verify the embedding-based table schema retrieval and few-shot selection system.
+
+### Test Case 6.1: Vitals and Patient Demographics Semantic Retrieval
+*   **Question**: `vitals heart rate of patients`
+*   **Expected Behavior**:
+    *   The backend retrieves the user query and embeds it using OpenAI Embeddings (`text-embedding-3-small`) or falls back to TF-IDF.
+    *   The system performs similarity search against the cached table schema representations.
+    *   The `vitals` and `patients` tables are correctly resolved and retrieved (boosted by the Relational Semantic Expansion graph).
+    *   In the UI under "Token & Latency Details", RAG Schema Tables badges show `vitals`, `patients` (and potentially connected tables like `encounters`).
+*   **Why it tests**: Validates that vector similarity accurately isolates relevant table schemas.
+
+### Test Case 6.2: Dynamic Few-Shot Match and Badges Display
+*   **Question**: `Find all patients who have active allergies`
+*   **Expected Behavior**:
+    *   The backend matches the query against the few-shot query library.
+    *   Retrieves the most semantically relevant few-shot examples (e.g. ones referencing `allergies` or `patients`).
+    *   In the UI under "Token & Latency Details", the collapsible drawer displays "Retrieved Few-Shot Examples (RAG similarity match)" listing the matched questions (e.g., those referencing allergies) with their similarity score.
+*   **Why it tests**: Confirms E2E visualization of semantic few-shot RAG matching and layout correctness.

@@ -13,19 +13,27 @@ This document tracks the feature additions, database routing, model integrations
 ## [v18_sarvam_explain_cost_guardrails](#v18_sarvam_explain_cost_guardrails) (Planned Branch)
 *   **Release Focus**: Explain-based cost safety query execution planners and DB optimizer checks.
 
-## [v17_sarvam_vector_metadata_rag](#v17_sarvam_vector_metadata_rag) (Planned Branch)
+## [v17_vector_metadata_rag](#v17_vector_metadata_rag) (Current Active Branch)
 *   **Release Focus**: Dense Vector-based Metadata RAG for scalable table schema lookup.
+*   **Vector Search & Caching**: Transitioned table schema search from keyword matching to dense vector embeddings (`text-embedding-3-small`). Embeds all schemas on startup, caching them in memory for sub-millisecond retrieval latency.
+*   **Local TF-IDF Fallback**: Preserves offline compatibility by falling back to local TF-IDF Cosine similarity math if OpenAI API key is missing or request fails.
+*   **UI Integration & E2E Validation**: Displays matched tables as badges inside the Token & Latency Details drawer. Verified via Selenium automated testing (`test_13`).
 
-## [v16_sarvam_dynamic_few_shot_rag](#v16_sarvam_dynamic_few_shot_rag) (Planned Branch)
+## [v16_dynamic_few_shot_rag](#v16_dynamic_few_shot_rag)
 *   **Release Focus**: Dynamic Few-Shot RAG Query Library using embedding-based similarity matches.
+*   **Semantic Few-Shot Matcher**: Matches clinical questions against a local library of curated few-shot examples using embeddings to find the most relevant context.
+*   **UI Library view**: Allows admins to view the few-shot query library dynamically.
 
-## [v15_sarvam_immutable_audit_ledger](#v15_sarvam_immutable_audit_ledger) (Planned Branch)
+## [v15_immutable_audit_ledger](#v15_immutable_audit_ledger)
 *   **Release Focus**: HIPAA-compliant immutable audit logs.
+*   **Cryptographic Chain**: Pairs all queries with a SHA-256 hash chaining mechanism ensuring data query audit logs are tamper-evident.
+*   **Admin Logs Verification UI**: Visual ledger log browser and chain integrity verification endpoint.
 
-## [v14_sarvam_ast_safety_parser](#v14_sarvam_ast_safety_parser) (Planned Branch)
+## [v14_ast_safety_parser](#v14_ast_safety_parser)
 *   **Release Focus**: Abstract Syntax Tree (AST) query structure parser for database write safety.
+*   **SQLGlot Validation**: Validates query structures against a safe-AST schema validator, explicitly blocking modifications.
 
-## [v13_sarvam_interactive_semantic_builder](#v13_sarvam_interactive_semantic_builder) (Current Active Branch)
+## [v13_sarvam_interactive_semantic_builder](#v13_sarvam_interactive_semantic_builder)
 *   **Release Focus**: Interactive Configurator Editor V2.
 *   **Auto-Discovery Integration**: Automatically parses schema relations and infers column classification rules from active DB.
 *   **JSON Config Import/Export**: Enables visual layout backups and migrations.
