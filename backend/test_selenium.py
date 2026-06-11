@@ -185,6 +185,15 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         except Exception:
             pass
 
+        # Restore semantic_layer.yaml to ensure environment state isolation
+        if hasattr(self, "backup_path") and os.path.exists(self.backup_path):
+            try:
+                import shutil
+                shutil.copy2(self.backup_path, self.yaml_path)
+                time.sleep(1)
+            except Exception:
+                pass
+
     def login(self, username, password):
         """Helper to input credentials and submit authentication."""
         driver = self.driver
@@ -214,8 +223,8 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self.driver.refresh()
         time.sleep(1)
 
-    def test_1_invalid_login(self):
-        self.log("[Test 1] Testing invalid authentication error display...")
+    def test_01_invalid_login(self):
+        self.log("[Test 01] Testing invalid authentication error display...")
         driver = self.driver
         WebDriverWait(driver, 5).until(
             EC.visibility_of_element_located((By.ID, "login-overlay"))
@@ -234,8 +243,8 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self.log(f"-> SUCCESS: Invalid login correctly rejected with: '{error_msg.text}'")
         self._test_has_failed = False
 
-    def test_2_admin_login_and_role_badge(self):
-        self.log("[Test 2] Testing admin authentication and RBAC UI role badge...")
+    def test_02_admin_login_and_role_badge(self):
+        self.log("[Test 02] Testing admin authentication and RBAC UI role badge...")
         self.login("admin", ADMIN_PASSWORD)
         
         # Verify role badge display
@@ -249,8 +258,8 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
-    def test_3_sidebar_interaction(self):
-        self.log("[Test 3] Testing sidebar schema loader and interactive click injection...")
+    def test_03_sidebar_interaction(self):
+        self.log("[Test 03] Testing sidebar schema loader and interactive click injection...")
         self.login("admin", ADMIN_PASSWORD)
         
         # Verify status text transitions to 'Connected'
@@ -274,8 +283,8 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
-    def test_4_collapsible_sidebar(self):
-        self.log("[Test 4] Testing collapsible sidebar panel and transitions...")
+    def test_04_collapsible_sidebar(self):
+        self.log("[Test 04] Testing collapsible sidebar panel and transitions...")
         self.login("admin", ADMIN_PASSWORD)
         
         app_container = self.driver.find_element(By.ID, "app-container")
@@ -298,8 +307,8 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
-    def test_5_theme_toggle(self):
-        self.log("[Test 5] Testing theme switcher light/dark persistence...")
+    def test_05_theme_toggle(self):
+        self.log("[Test 05] Testing theme switcher light/dark persistence...")
         self.login("admin", ADMIN_PASSWORD)
         
         body = self.driver.find_element(By.TAG_NAME, "body")
@@ -317,8 +326,8 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
-    def test_6_query_execution_and_standard_caching(self):
-        self.log("[Test 6] Testing query compilation, data table rendering, and standard cache hits...")
+    def test_06_query_execution_and_standard_caching(self):
+        self.log("[Test 06] Testing query compilation, data table rendering, and standard cache hits...")
         self.login("admin", ADMIN_PASSWORD)
         
         # Wait for connection
@@ -369,8 +378,8 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
-    def test_7_query_lineage(self):
-        self.log("[Test 7] Testing lineage audit logs visual tree extraction...")
+    def test_07_query_lineage(self):
+        self.log("[Test 07] Testing lineage audit logs visual tree extraction...")
         self.login("admin", ADMIN_PASSWORD)
         
         # Submit query involving a join
@@ -403,8 +412,8 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
-    def test_8_expert_override_loop(self):
-        self.log("[Test 8] Testing RLHF expert overrides & 'Expert Approved' status...")
+    def test_08_expert_override_loop(self):
+        self.log("[Test 08] Testing RLHF expert overrides & 'Expert Approved' status...")
         self.login("admin", ADMIN_PASSWORD)
         
         WebDriverWait(self.driver, 10).until(
@@ -469,8 +478,8 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
-    def test_9_compliance_pii_masking_researcher(self):
-        self.log("[Test 9] Testing HIPAA compliance and PII masking for Researcher role...")
+    def test_09_compliance_pii_masking_researcher(self):
+        self.log("[Test 09] Testing HIPAA compliance and PII masking for Researcher role...")
         self.login("researcher", "researcher123")
         
         WebDriverWait(self.driver, 10).until(
@@ -606,6 +615,119 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
             EC.invisibility_of_element_located((By.ID, "settings-overlay"))
         )
         self.log("-> SUCCESS: Closed configurator drawer.")
+        self._test_has_failed = False
+        self.logout()
+
+    def test_11_semantic_configurator_import(self):
+        self.log("[Test 11] Testing Configurator Import JSON configuration and validation...")
+        driver = self.driver
+        self.login("admin", ADMIN_PASSWORD)
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # 1. Open drawer
+        settings_btn = WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.ID, "settings-toggle-btn"))
+        )
+        settings_btn.click()
+        WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.ID, "settings-overlay"))
+        )
+        self.log("-> SUCCESS: Opened Semantic Configurator drawer.")
+        
+        # 2. Write a temporary config JSON file for testing import
+        import json
+        temp_config = {
+            "version": "1.0.0",
+            "entities": {
+                "ImportedPatient": {
+                    "table_name": "patients",
+                    "primary_key": "patient_id",
+                    "description": "Imported Patient demographic entity",
+                    "fields": {
+                        "patientId": "patient_id",
+                        "fullName": {
+                            "column_name": "full_name",
+                            "classification": "pii_name"
+                        }
+                    }
+                }
+            },
+            "relationships": [],
+            "metrics": {
+                "Imported Patient Count": {
+                    "description": "Total count of patients imported",
+                    "formula": "SELECT COUNT(*) FROM patients"
+                }
+            },
+            "security_policies": {
+                "roles": {
+                    "researcher": {
+                        "masking_rules": {
+                            "pii_name": "mask_name"
+                        },
+                        "abac_policies": []
+                    }
+                }
+            }
+        }
+        
+        temp_file_path = os.path.abspath(os.path.join(BASE_DIR, "temp_import_config.json"))
+        with open(temp_file_path, "w", encoding="utf-8") as f:
+            json.dump(temp_config, f, indent=2)
+            
+        try:
+            # 3. Simulate file upload using the hidden file input
+            file_input = driver.find_element(By.ID, "import-config-file")
+            file_input.send_keys(temp_file_path)
+            
+            # 4. Wait for import success message in status
+            WebDriverWait(driver, 10).until(
+                EC.text_to_be_present_in_element((By.ID, "settings-status-msg"), "imported successfully")
+            )
+            self.log("-> SUCCESS: Uploaded configuration file and verified success status.")
+            
+            # 5. Check if the newly imported metric card is loaded
+            # Switch to Predefined Metrics tab
+            metrics_tab_btn = driver.find_element(By.XPATH, "//button[@data-tab='tab-metrics']")
+            metrics_tab_btn.click()
+            time.sleep(1)
+            
+            # Verify the Imported Patient Count card is visible
+            metric_cards = driver.find_elements(By.CLASS_NAME, "metric-card")
+            imported_card_found = False
+            for card in metric_cards:
+                name_input = card.find_element(By.CLASS_NAME, "metric-name")
+                if name_input.get_attribute("value") == "Imported Patient Count":
+                    imported_card_found = True
+                    break
+            self.assertTrue(imported_card_found, "The imported metric card 'Imported Patient Count' should be displayed.")
+            self.log("-> SUCCESS: Verified the imported metric card exists in the Predefined Metrics tab.")
+            
+            # 6. Click Save & Hot-Reload to verify save works
+            save_btn = driver.find_element(By.ID, "save-settings-btn")
+            save_btn.click()
+            
+            WebDriverWait(driver, 10).until(
+                EC.text_to_be_present_in_element((By.ID, "settings-status-msg"), "saved & hot-reloaded")
+            )
+            self.log("-> SUCCESS: Imported changes saved and hot-reloaded successfully.")
+            
+            # 7. Close drawer
+            close_btn = driver.find_element(By.ID, "close-settings-btn")
+            close_btn.click()
+            
+            WebDriverWait(driver, 5).until(
+                EC.invisibility_of_element_located((By.ID, "settings-overlay"))
+            )
+            self.log("-> SUCCESS: Closed configurator drawer after import.")
+            
+        finally:
+            # Clean up the temp import file
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+                
         self._test_has_failed = False
         self.logout()
 

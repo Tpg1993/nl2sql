@@ -109,6 +109,36 @@ class TestConfigEditorAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("does not exist in table", response.json()["detail"])
 
+    def test_post_config_validation_failure_relationship_entity(self):
+        """Saving config with relationship referencing non-existent entity must return 400."""
+        invalid_payload = {
+            "version": "1.0.0",
+            "entities": {
+                "Patient": {
+                    "table_name": "patients",
+                    "primary_key": "patient_id",
+                    "description": "Patients",
+                    "fields": {}
+                }
+            },
+            "relationships": [
+                {
+                    "from_entity": "Patient",
+                    "to_entity": "FakeEntity",
+                    "join_type": "many_to_one",
+                    "join_keys": {
+                        "from_key": "patient_id",
+                        "to_key": "patient_id"
+                    }
+                }
+            ],
+            "metrics": {},
+            "security_policies": {"roles": {}}
+        }
+        response = self.client.post("/api/config/semantic-layer", json=invalid_payload, headers=self.admin_headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("non-existent destination entity", response.json()["detail"])
+
     def test_post_config_success_and_hot_reload(self):
         """Successfully saving config must update file and hot-reload model mappings."""
         # Read active configuration first to base our new configuration on it
@@ -155,6 +185,13 @@ class TestConfigEditorAPI(unittest.TestCase):
         response = self.client.post("/api/config/test-metric", json=payload, headers=self.admin_headers)
         self.assertEqual(response.status_code, 400)
         self.assertIn("no such table", response.json().get("detail", "").lower())
+
+    def test_test_metric_security_violation(self):
+        """Testing metric formula with forbidden keyword (e.g. DROP TABLE) must return 400 security error."""
+        payload = {"formula": "DROP TABLE patients"}
+        response = self.client.post("/api/config/test-metric", json=payload, headers=self.admin_headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("security violation", response.json().get("detail", "").lower())
 
     def test_discover_forbidden(self):
         """Auto-discovery must be blocked for non-admin users with 403."""

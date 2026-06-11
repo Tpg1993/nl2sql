@@ -546,6 +546,11 @@ def test_metric_formula(payload: TestMetricPayload, current_user: dict = Depends
         raise HTTPException(status_code=400, detail="Metric formula cannot be empty.")
         
     try:
+        agent.audit_sql_query(formula)
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+        
+    try:
         from sqlalchemy import text
         with agent.engine.connect() as conn:
             try:

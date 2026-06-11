@@ -1697,10 +1697,7 @@ if (importConfigBtn && importConfigFile) {
                 renderMetrics(activeConfig.metrics);
                 renderPolicies(activeConfig.security_policies);
                 
-                settingsStatusMsg.style.display = "inline";
-                settingsStatusMsg.style.color = "#4ADE80";
-                settingsStatusMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> Configuration imported successfully! Click Save & Hot-Reload to apply.`;
-                setTimeout(() => { settingsStatusMsg.style.display = "none"; }, 5000);
+                showSettingsStatus(`<i class="fa-solid fa-circle-check"></i> Configuration imported successfully! Click Save & Hot-Reload to apply.`, "#4ADE80", 5000);
             } catch (err) {
                 console.error("Import failed:", err);
                 alert("Failed to import configuration: " + err.message);
