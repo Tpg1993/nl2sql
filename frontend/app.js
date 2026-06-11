@@ -219,7 +219,7 @@ async function submitQuestion(question) {
         
         const data = await response.json();
         if (data.success) {
-            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries, data.is_expert_matched, data.lineage, data.estimated_cost, question, data.retrieved_tables, data.rag_savings_pct);
+            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries, data.is_expert_matched, data.lineage, data.estimated_cost, question, data.retrieved_tables, data.rag_savings_pct, data.retrieved_few_shots);
         } else {
             appendAssistantError(data.error || "An error occurred during query generation.");
         }
@@ -372,7 +372,7 @@ function highlightSQL(sql) {
 }
 
 // Append Assistant Success Response bubble (SQL, Table, and Tokens)
-function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null, model = "gpt-4o-mini", retries = 0, isExpertMatched = false, lineage = {}, estimatedCost = 0.0, questionText = "", retrievedTables = [], ragSavingsPct = 0.0) {
+function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null, model = "gpt-4o-mini", retries = 0, isExpertMatched = false, lineage = {}, estimatedCost = 0.0, questionText = "", retrievedTables = [], ragSavingsPct = 0.0, retrievedFewShots = []) {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
@@ -641,6 +641,22 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                                     <span class="detail-value" style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;">
                                         ${retrievedTables.map(t => `<span class="rag-table-badge" style="background: rgba(167, 139, 250, 0.15); color: #c084fc; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(167, 139, 250, 0.3); font-size: 0.75rem; font-family: monospace; font-weight: 600;"><i class="fa-solid fa-table" style="margin-right: 4px; font-size: 0.7rem;"></i>${t}</span>`).join('')}
                                     </span>
+                                </div>
+                                ` : ''}
+                                ${retrievedFewShots && retrievedFewShots.length > 0 ? `
+                                <div class="meta-detail-item" style="grid-column: span 2; margin-top: 8px; border-top: 1px dashed rgba(255, 255, 255, 0.1); padding-top: 10px;">
+                                    <span class="detail-label" style="display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-lightbulb" style="color: #f59e0b; font-size: 0.85rem;"></i> Retrieved Few-Shot Examples (RAG similarity match)</span>
+                                    <div class="few-shot-examples-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+                                        ${retrievedFewShots.map(fs => `
+                                            <div class="few-shot-example-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 6px; padding: 8px 10px; font-size: 0.75rem;">
+                                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-weight: 600; color: var(--text-secondary);">
+                                                    <span>Q: ${fs.question}</span>
+                                                    <span style="color: #34d399; font-size: 0.7rem;"><i class="fa-solid fa-gauge-simple-high"></i> Similarity: ${(fs.score * 100).toFixed(1)}%</span>
+                                                </div>
+                                                <pre style="margin: 0; background: rgba(0, 0, 0, 0.2); padding: 4px 6px; border-radius: 4px; font-family: monospace; color: #a78bfa; overflow-x: auto; white-space: pre-wrap;"><code>${fs.sql}</code></pre>
+                                            </div>
+                                        `).join('')}
+                                    </div>
                                 </div>
                                 ` : ''}
                             </div>

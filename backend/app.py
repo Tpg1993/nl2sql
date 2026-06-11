@@ -407,6 +407,7 @@ class SemanticLayerConfigPayload(BaseModel):
     relationships: list
     metrics: dict
     security_policies: dict
+    few_shot_examples: list = []
 
 
 @app.get("/api/config/semantic-layer")
@@ -514,11 +515,13 @@ def update_semantic_layer_config(payload: SemanticLayerConfigPayload, current_us
         with open(yaml_path, "w", encoding="utf-8") as f:
             yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
             
-        # 4. Hot-reload agent's semantic layer and Metadata RAG in-memory
+        # 4. Hot-reload agent's semantic layer, Metadata RAG, and FewShotLibrary in-memory
         from .semantic_layer import SemanticLayer
         from .metadata_rag import MetadataRAG
+        from .few_shot_library import FewShotLibrary
         agent.semantic_layer = SemanticLayer(yaml_path)
         agent.metadata_rag = MetadataRAG(agent.engine, yaml_path)
+        agent.few_shot_library = FewShotLibrary(yaml_path)
         
         # Clear database cache to prevent returning stale cached results
         if cache_manager:
@@ -780,12 +783,14 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             retries = 0
             retrieved_tables = []
             rag_savings_pct = 0.0
+            retrieved_few_shots = []
             if isinstance(cached_tokens, dict):
                 cached_tokens = cached_tokens.copy()
                 model = cached_tokens.pop("model", "Unknown Model")
                 retries = cached_tokens.pop("retries", 0)
                 retrieved_tables = cached_tokens.pop("retrieved_tables", [])
                 rag_savings_pct = cached_tokens.pop("rag_savings_pct", 0.0)
+                retrieved_few_shots = cached_tokens.pop("retrieved_few_shots", [])
             
             # Apply dynamic masking on cached raw results
             raw_results = cached.get("result")
@@ -827,6 +832,7 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
                 "estimated_cost": 0.0,
                 "retrieved_tables": retrieved_tables,
                 "rag_savings_pct": rag_savings_pct,
+                "retrieved_few_shots": retrieved_few_shots,
                 "error": None
             }
 
@@ -857,6 +863,7 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             cached_tokens_payload["retries"] = res.get("retries", 0)
             cached_tokens_payload["retrieved_tables"] = res.get("retrieved_tables", [])
             cached_tokens_payload["rag_savings_pct"] = res.get("rag_savings_pct", 0.0)
+            cached_tokens_payload["retrieved_few_shots"] = res.get("retrieved_few_shots", [])
             
             cache_manager.set(
                 question=query_req.question,
@@ -899,6 +906,7 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             "estimated_cost": res.get("estimated_cost", 0.0),
             "retrieved_tables": res.get("retrieved_tables", []),
             "rag_savings_pct": res.get("rag_savings_pct", 0.0),
+            "retrieved_few_shots": res.get("retrieved_few_shots", []),
             "error": error_message
         }
     except Exception as e:
@@ -921,6 +929,6 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             "lineage": {},
             "estimated_cost": 0.0,
             "retrieved_tables": [],
-            "rag_savings_pct": 0.0
+            "rag_savings_pct": 0.0,
+            "retrieved_few_shots": []
         }
-

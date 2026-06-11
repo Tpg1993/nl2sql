@@ -11,6 +11,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import MessagesState, StateGraph, START, END
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_core.messages import AIMessage, HumanMessage
+from .few_shot_library import FewShotLibrary
 
 # Load environment variables from .env file if available
 try:
@@ -32,6 +33,7 @@ class AgentState(MessagesState):
     retrieved_tables: List[str]
     rag_savings_pct: float
     user_context: Dict[str, Any]
+    retrieved_few_shots: List[Dict[str, Any]]
 
 
 class EHRQueryAgent:
@@ -97,11 +99,13 @@ class EHRQueryAgent:
         from .expert_overrides import ExpertOverrideStore
         from .prompts import PromptLibrary
         from .metadata_rag import MetadataRAG
+        from .few_shot_library import FewShotLibrary
         self.semantic_layer = SemanticLayer()
         self.cost_planner = CostPlanner(self.engine)
         self.override_store = ExpertOverrideStore()
         self.prompt_library = PromptLibrary()
         self.metadata_rag = MetadataRAG(self.engine)
+        self.few_shot_library = FewShotLibrary(self.semantic_layer.config_path)
 
         # Pre-calculate full DDL length for RAG savings metrics
         try:
@@ -217,7 +221,8 @@ class EHRQueryAgent:
             return {
                 "messages": [AIMessage(content=override_sql)],
                 "latencies": latencies,
-                "is_expert_matched": True
+                "is_expert_matched": True,
+                "retrieved_few_shots": []
             }
 
         # Locate schema description in message history
@@ -237,11 +242,24 @@ class EHRQueryAgent:
             if last_msg.startswith("Error executing query:"):
                 previous_error = last_msg
 
+        # Retrieve relevant few-shot examples from semantic layer configuration
+        retrieved_few_shots = self.few_shot_library.retrieve_few_shots(user_question, top_k=2)
+        print(f"-> Few-Shot RAG Matches: {retrieved_few_shots}")
+        
+        few_shot_context = ""
+        if retrieved_few_shots:
+            few_shot_context = "Reference Examples of Similar Queries:\n"
+            for idx, ex in enumerate(retrieved_few_shots):
+                few_shot_context += f"Example {idx + 1}:\n"
+                few_shot_context += f"Question: {ex.get('question')}\n"
+                few_shot_context += f"SQL: {ex.get('sql')}\n\n"
+
         prompt = self.prompt_library.format_sql_generation(
             user_question=user_question,
             semantic_context=self.semantic_layer.get_context_prompt(),
             db_schema=db_schema,
-            previous_error=previous_error
+            previous_error=previous_error,
+            few_shot_context=few_shot_context
         )
         
         result = self.llm.invoke(prompt)
@@ -251,7 +269,12 @@ class EHRQueryAgent:
         latencies["generation"] = latencies.get("generation", 0.0) + elapsed_ms
         
         print(f"-> Active Model Prompt Output: {result.content}")
-        return {"messages": [result], "latencies": latencies, "is_expert_matched": False}
+        return {
+            "messages": [result],
+            "latencies": latencies,
+            "is_expert_matched": False,
+            "retrieved_few_shots": retrieved_few_shots
+        }
 
     @staticmethod
     def strip_sql_literals(sql: str) -> str:
@@ -622,7 +645,8 @@ class EHRQueryAgent:
             "pii_params": pii_params,
             "retrieved_tables": [],
             "rag_savings_pct": 0.0,
-            "user_context": user_context
+            "user_context": user_context,
+            "retrieved_few_shots": []
         }
         output = self.agent.invoke(initial_state)
         return output["messages"][-1].content
@@ -642,7 +666,8 @@ class EHRQueryAgent:
             "pii_params": pii_params,
             "retrieved_tables": [],
             "rag_savings_pct": 0.0,
-            "user_context": user_context
+            "user_context": user_context,
+            "retrieved_few_shots": []
         }
         output = self.agent.invoke(initial_state)
 
@@ -710,5 +735,6 @@ class EHRQueryAgent:
             "lineage": output.get("lineage", {}),
             "estimated_cost": output.get("estimated_cost", 0.0),
             "retrieved_tables": output.get("retrieved_tables", []),
-            "rag_savings_pct": output.get("rag_savings_pct", 0.0)
+            "rag_savings_pct": output.get("rag_savings_pct", 0.0),
+            "retrieved_few_shots": output.get("retrieved_few_shots", [])
         }

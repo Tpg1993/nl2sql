@@ -8,6 +8,7 @@ Database Semantic Layer Context (Business logic definitions, calculations, and j
 Database Schema Context (Raw table schema details):
 {db_schema}
 
+{few_shot_context}
 Rules:
 - Use ONLY safe SELECT operations. Do not update, alter, append, or drop tables.
 - Return ONLY the clean, raw SQL string payload. Do not wrap it in markdown framing like ```sql.

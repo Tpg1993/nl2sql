@@ -211,3 +211,18 @@ security_policies:
           user_attribute: department_id
           db_column: department_id
         fallback_action: mask
+
+few_shot_examples:
+  - question: "Find all patients who have active allergies"
+    sql: "SELECT p.patient_id, p.full_name FROM patients p JOIN allergies a ON p.patient_id = a.patient_id WHERE a.is_active = 1;"
+  - question: "Show vitals for patients with a BMI greater than 30"
+    sql: "SELECT v.patient_id, v.sbp, v.dbp, v.bmi FROM vitals v WHERE v.bmi > 30;"
+  - question: "What is the total billing amount for departments in Boston?"
+    sql: "SELECT SUM(e.total_charges) FROM encounters e JOIN departments d ON e.department_id = d.department_id WHERE d.location = 'Boston';"
+  - question: "What are the active medications for patient John Doe?"
+    sql: "SELECT m.drug_name FROM medications m JOIN patients p ON m.patient_id = p.patient_id WHERE p.full_name = 'John Doe' AND m.is_active = 1;"
+  - question: "Count of admissions by department"
+    sql: "SELECT d.department_name, COUNT(e.encounter_id) AS admission_count FROM encounters e JOIN departments d ON e.department_id = d.department_id GROUP BY d.department_name;"
+  - question: "Find chronic diagnoses for female patients"
+    sql: "SELECT DISTINCT dia.diagnosis_name FROM diagnoses dia JOIN patients p ON dia.patient_id = p.patient_id WHERE p.gender = 'Female' AND dia.is_chronic = 1;"
+
