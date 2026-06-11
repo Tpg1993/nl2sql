@@ -315,6 +315,14 @@ except Exception as e:
     print(f"Error initializing cache manager: {e}")
     cache_manager = None
 
+# Initialize cryptographic audit ledger
+try:
+    from .audit_ledger import AuditLedger
+    audit_ledger = AuditLedger()
+except Exception as e:
+    print(f"Error initializing audit ledger: {e}")
+    audit_ledger = None
+
 
 class QueryRequest(BaseModel):
     question: str
@@ -677,6 +685,46 @@ def discover_schema_config(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/config/audit-logs")
+def get_audit_logs(current_user: dict = Depends(get_current_user)):
+    """Retrieves all immutable audit logs, restricted to administrators."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Only Administrators can view audit logs."
+        )
+    if not audit_ledger:
+        raise HTTPException(status_code=500, detail="Audit ledger is not initialized.")
+    try:
+        logs = audit_ledger.get_all_logs()
+        return {"success": True, "logs": logs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/config/verify-audit-ledger")
+def verify_audit_ledger_endpoint(current_user: dict = Depends(get_current_user)):
+    """Verifies the integrity of the audit ledger hash chain, restricted to administrators."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Only Administrators can verify the audit ledger."
+        )
+    if not audit_ledger:
+        raise HTTPException(status_code=500, detail="Audit ledger is not initialized.")
+    try:
+        verified, tampered_ids = audit_ledger.verify_ledger_integrity()
+        return {
+            "success": True,
+            "verified": verified,
+            "tampered_ids": tampered_ids,
+            "message": "Audit ledger integrity verified successfully." if verified else "Audit ledger tampering detected!"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 @app.get("/api/metadata")
 
@@ -743,6 +791,20 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             raw_results = cached.get("result")
             masked_results = apply_policy_masking(raw_results, cached.get("query"), current_user, agent)
             
+            # Record audit log
+            if audit_ledger:
+                try:
+                    audit_ledger.write_audit_log(
+                        username=current_user.get("username", "anonymous"),
+                        role=current_user.get("role", "researcher"),
+                        prompt=query_req.question,
+                        sql_query=cached.get("query", ""),
+                        latency_ms=elapsed_ms,
+                        dataset=masked_results
+                    )
+                except Exception as audit_err:
+                    print(f"Audit logging failed on cache hit: {audit_err}")
+            
             return {
                 "query": cached.get("query"),
                 "result": masked_results,
@@ -767,6 +829,7 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
                 "rag_savings_pct": rag_savings_pct,
                 "error": None
             }
+
 
     # 2. Run agent if cache miss
     try:
@@ -806,6 +869,20 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
         # Apply dynamic masking on raw parsed data before returning to this specific user
         masked_parsed_data = apply_policy_masking(parsed_data, res["query"], current_user, agent)
 
+        # Record audit log
+        if audit_ledger:
+            try:
+                audit_ledger.write_audit_log(
+                    username=current_user.get("username", "anonymous"),
+                    role=current_user.get("role", "researcher"),
+                    prompt=query_req.question,
+                    sql_query=res["query"],
+                    latency_ms=elapsed_ms,
+                    dataset=masked_parsed_data
+                )
+            except Exception as audit_err:
+                print(f"Audit logging failed: {audit_err}")
+
         return {
             "query": res["query"],
             "result": masked_parsed_data,
@@ -825,6 +902,7 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             "error": error_message
         }
     except Exception as e:
+
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
         return {
             "error": str(e),

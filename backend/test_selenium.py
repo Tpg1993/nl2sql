@@ -50,6 +50,15 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
                 os.remove(cache_db_path)
             except Exception as e:
                 cls.log(f"Could not delete cache database: {e}")
+                
+        # Clear the audit_ledger.db file to ensure fresh audit state isolation
+        audit_db_path = os.path.abspath(os.path.join(BASE_DIR, "audit_ledger.db"))
+        if os.path.exists(audit_db_path):
+            try:
+                cls.log(f"Clearing audit database at {audit_db_path}...")
+                os.remove(audit_db_path)
+            except Exception as e:
+                cls.log(f"Could not delete audit database: {e}")
         
         # 1. Start FastAPI backend, logging output to uvicorn.log
         cls.log("Launching backend uvicorn server on http://127.0.0.1:8000...")
@@ -728,6 +737,91 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
             if os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
                 
+        self._test_has_failed = False
+        self.logout()
+
+    def test_12_audit_ledger_flow_and_chain_verification(self):
+        self.log("[Test 12] Testing Immutable Audit Ledger logging and chain validation...")
+        driver = self.driver
+        self.login("admin", ADMIN_PASSWORD)
+        
+        # Wait for connected
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # 1. Run a query to generate an audit log record
+        input_box = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.ID, "user-input"))
+        )
+        input_box.clear()
+        query_text = "How many patients do we have in total?"
+        input_box.send_keys(query_text)
+        
+        send_btn = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.ID, "send-button"))
+        )
+        send_btn.click()
+        
+        # Wait for the results to finish rendering (standard time is up to 8s)
+        time.sleep(8)
+        
+        # Verify table result is present
+        result_table = WebDriverWait(driver, 45).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+        )
+        self.assertTrue(result_table.is_displayed())
+        self.log("-> Query successfully executed.")
+        
+        # 2. Open Configurators settings drawer
+        settings_btn = WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.ID, "settings-toggle-btn"))
+        )
+        settings_btn.click()
+        
+        # Wait for drawer overlay to display
+        WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.ID, "settings-overlay"))
+        )
+        self.log("-> Configurator settings drawer opened.")
+        
+        # 3. Switch to Audit Logs tab
+        audit_tab_btn = driver.find_element(By.XPATH, "//button[@data-tab='tab-audit-logs']")
+        audit_tab_btn.click()
+        time.sleep(1)
+        
+        # 4. Verify log entry exists in table
+        tbody = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.ID, "audit-logs-tbody"))
+        )
+        
+        rows = tbody.find_elements(By.TAG_NAME, "tr")
+        self.assertGreater(len(rows), 0, "Audit logs table should contain at least one logged row.")
+        
+        # Check first row contains query details
+        first_row_text = rows[0].text
+        self.assertIn("admin", first_row_text)
+        self.assertIn("patients", first_row_text.lower())
+        self.log("-> Verified query transaction logged inside Audit Ledger table.")
+        
+        # 5. Click Verify Ledger Chain button
+        verify_btn = driver.find_element(By.ID, "verify-audit-chain-btn")
+        verify_btn.click()
+        
+        # 6. Assert validation success message
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "settings-status-msg"), "integrity verified successfully")
+        )
+        self.log("-> SUCCESS: Cryptographic ledger chain validation successfully verified.")
+        
+        # 7. Close drawer
+        close_btn = driver.find_element(By.ID, "close-settings-btn")
+        close_btn.click()
+        
+        WebDriverWait(driver, 5).until(
+            EC.invisibility_of_element_located((By.ID, "settings-overlay"))
+        )
+        
         self._test_has_failed = False
         self.logout()
 

@@ -31,3 +31,17 @@ This folder contains the visual execution proof and user interface states for th
 ## 7. Dynamic Compliance & PII Cell Masking (HIPAA)
 * **Filename**: `07_PII_Cell_Masking_For_Researcher_Role.png`
 * **Functionality**: Enforces dynamic masking rules based on the user's active RBAC role. Users logged in as `researcher` see PII names and emails masked with stars (`*`) and a locked cell icon in the tabular result view.
+
+---
+
+## 8. Immutable Audit Ledger — Log Table View
+* **Filename**: `08_Immutable_Audit_Ledger_Log_Table.png`
+* **Functionality**: Every NL-to-SQL query execution is appended as an immutable cryptographic record. The Audit Logs tab (under Semantic Configurator) displays a table showing: ID, Timestamp, Username, Role, Original Question, Generated SQL, and the SHA-256 Record Hash. Only `admin` role can view this panel.
+* **Backend Proof**: `GET /api/config/audit-logs` returns `{"success": true, "logs": [...13 entries...]}` ✅
+* **Unit Tests**: `backend/test_audit.py` — 3 tests PASSED (`test_write_and_chaining`, `test_tampering_detection`, `test_sqlglot_parsing`) ✅
+
+## 9. Immutable Audit Ledger — Integrity Verification
+* **Filename**: `09_Audit_Ledger_Integrity_Verified.png`
+* **Functionality**: The "Verify Ledger Integrity" button triggers a full SHA-256 hash chain traversal from genesis block to the latest record. Any tampering (direct DB edit) is cryptographically detected.
+* **Backend Proof**: `GET /api/config/verify-audit-ledger` returns `{"verified": true, "tampered_ids": [], "message": "Audit ledger integrity verified successfully."}` ✅
+* **Chain Architecture**: Each record's hash is computed as `SHA256(timestamp|username|role|prompt|sql|tables|columns|latency|dataset_hash|previous_hash)` creating a linked-list blockchain.

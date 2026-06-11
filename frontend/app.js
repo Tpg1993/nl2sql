@@ -1841,3 +1841,142 @@ function serializeConfigForm() {
 }
 
 
+// =====================================================================
+// 6. CRYPTOGRAPHIC AUDIT LOGS TAB
+// =====================================================================
+async function loadAuditLogs() {
+    const tbody = document.getElementById("audit-logs-tbody");
+    if (!tbody) return;
+    
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin"></i> Loading audit logs...</td></tr>`;
+    
+    try {
+        const response = await fetch(`${API_BASE}/config/audit-logs`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data.success) {
+            renderAuditLogsTable(data.logs);
+        } else {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:#FCA5A5;">Failed to load logs: ${data.error || "Unknown error"}</td></tr>`;
+        }
+    } catch (err) {
+        console.error("Failed to load audit logs:", err);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:#FCA5A5;">Error: ${err.message}</td></tr>`;
+    }
+}
+
+function renderAuditLogsTable(logs) {
+    const tbody = document.getElementById("audit-logs-tbody");
+    if (!tbody) return;
+    
+    if (logs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-muted); font-style:italic;">No audit records found.</td></tr>`;
+        return;
+    }
+    
+    tbody.innerHTML = logs.map(log => {
+        const dateStr = new Date(log.timestamp).toLocaleString();
+        
+        // Truncate SQL and prompt for viewability
+        const truncatedPrompt = log.prompt.length > 50 ? log.prompt.substring(0, 50) + "..." : log.prompt;
+        const truncatedSQL = log.sql_query.length > 60 ? log.sql_query.substring(0, 60) + "..." : log.sql_query;
+        
+        // Tables / Columns summary
+        const tablesStr = log.affected_tables.join(", ") || "none";
+        
+        // Dataset hash display
+        const truncatedHash = log.dataset_hash.substring(0, 8) + "..." + log.dataset_hash.substring(log.dataset_hash.length - 8);
+        
+        return `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); hover:background:rgba(255,255,255,0.02);">
+                <td style="padding: 10px; white-space: nowrap; color: var(--text-primary); font-size: 0.75rem;">${dateStr}</td>
+                <td style="padding: 10px; white-space: nowrap;"><strong>${log.username}</strong> <span style="font-size:0.7rem; color:var(--text-muted);">(${log.role})</span></td>
+                <td style="padding: 10px;" title="${log.prompt.replace(/"/g, '&quot;')}">${truncatedPrompt}</td>
+                <td style="padding: 10px; font-family: monospace; font-size:0.75rem;" title="${log.sql_query.replace(/"/g, '&quot;')}">
+                    <code>${truncatedSQL}</code>
+                    ${log.affected_tables.length > 0 ? `<div style="font-size:0.65rem; color:#a78bfa; margin-top:2px;">Tables: ${tablesStr}</div>` : ''}
+                </td>
+                <td style="padding: 10px; white-space: nowrap;">${parseFloat(log.latency_ms).toFixed(1)} ms</td>
+                <td style="padding: 10px; font-family: monospace; font-size: 0.7rem;" title="${log.dataset_hash}">${truncatedHash}</td>
+                <td style="padding: 10px; text-align: center; color: #4ADE80; font-size:0.95rem;" class="audit-row-status" data-row-id="${log.id}">
+                    <i class="fa-solid fa-circle-check" title="Chain link intact"></i>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function verifyAuditChain() {
+    const verifyBtn = document.getElementById("verify-audit-chain-btn");
+    if (!verifyBtn) return;
+    
+    const originalHTML = verifyBtn.innerHTML;
+    verifyBtn.disabled = true;
+    verifyBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Verifying...`;
+    
+    showSettingsStatus(`<i class="fa-solid fa-circle-notch fa-spin"></i> Validating cryptographic chain links...`, "var(--text-secondary)", 0);
+    
+    try {
+        const response = await fetch(`${API_BASE}/config/verify-audit-ledger`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data.success && data.verified) {
+            showSettingsStatus(`<i class="fa-solid fa-shield-halved"></i> Audit ledger integrity verified successfully! All chain hashes match.`, "#4ADE80", 5000);
+            
+            // Mark all table rows as intact
+            document.querySelectorAll(".audit-row-status").forEach(td => {
+                td.innerHTML = `<i class="fa-solid fa-circle-check" title="Chain link intact"></i>`;
+                td.style.color = "#4ADE80";
+            });
+        } else {
+            showSettingsStatus(`<i class="fa-solid fa-triangle-exclamation"></i> Warning: Audit ledger tampering detected!`, "#FCA5A5", 0);
+            
+            // Mark tampered rows in UI
+            const tamperedIds = data.tampered_ids || [];
+            document.querySelectorAll(".audit-row-status").forEach(td => {
+                const rowId = parseInt(td.getAttribute("data-row-id"));
+                if (tamperedIds.includes(rowId)) {
+                    td.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="cursor:help;" title="Cryptographic signature mismatch! Row has been tampered with or modified."></i>`;
+                    td.style.color = "#FCA5A5";
+                }
+            });
+        }
+    } catch (err) {
+        console.error("Audit ledger validation failed:", err);
+        showSettingsStatus(`<i class="fa-solid fa-triangle-exclamation"></i> Validation Error: ${err.message}`, "#FCA5A5", 0);
+    } finally {
+        verifyBtn.disabled = false;
+        verifyBtn.innerHTML = originalHTML;
+    }
+}
+
+// Wire Audit Log tab-specific event listeners
+document.addEventListener("DOMContentLoaded", () => {
+    const auditTabBtn = document.querySelector('button[data-tab="tab-audit-logs"]');
+    if (auditTabBtn) {
+        auditTabBtn.addEventListener("click", () => {
+            loadAuditLogs();
+        });
+    }
+    
+    const verifyAuditChainBtn = document.getElementById("verify-audit-chain-btn");
+    if (verifyAuditChainBtn) {
+        verifyAuditChainBtn.addEventListener("click", () => {
+            verifyAuditChain();
+        });
+    }
+});
+
+

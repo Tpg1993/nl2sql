@@ -194,6 +194,7 @@
                     <button class="settings-tab-btn" data-tab="tab-relationships">Relationships</button>
                     <button class="settings-tab-btn" data-tab="tab-metrics">Metrics</button>
                     <button class="settings-tab-btn" data-tab="tab-policies">Policies</button>
+                    <button class="settings-tab-btn" data-tab="tab-audit-logs">Audit Logs</button>
                 </div>
                 
                 <div class="settings-content-container">
@@ -240,6 +241,35 @@
                         <h3>Security Policies (RBAC/ABAC)</h3>
                         <div class="policies-container" id="policies-container">
                             <!-- Dynamic Role Policy Editor -->
+                        </div>
+                    </div>
+                    
+                    <!-- Audit Logs Tab -->
+                    <div class="settings-tab-content" id="tab-audit-logs">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <h3>HIPAA Compliance Audit Ledger</h3>
+                            <button class="action-btn" id="verify-audit-chain-btn" style="background: rgba(123, 44, 191, 0.15); border-color: rgba(123, 44, 191, 0.3); color: #d8b4fe;"><i class="fa-solid fa-link"></i> Verify Ledger Chain</button>
+                        </div>
+                        <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 6px;">
+                            <span style="font-weight:600; color: #a78bfa;"><i class="fa-solid fa-lock"></i> Cryptographic Non-Repudiation:</span> Each audit record is cryptographically linked to the previous log entry using a SHA-256 hash chain. Click the verify button above to validate the integrity of the ledger database.
+                        </div>
+                        <div class="audit-logs-table-container" style="max-height: 380px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
+                                <thead>
+                                    <tr style="background: rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-primary);">
+                                        <th style="padding: 10px;">Timestamp</th>
+                                        <th style="padding: 10px;">User (Role)</th>
+                                        <th style="padding: 10px;">Question</th>
+                                        <th style="padding: 10px;">SQL Query</th>
+                                        <th style="padding: 10px;">Latency</th>
+                                        <th style="padding: 10px;">Dataset Hash</th>
+                                        <th style="padding: 10px; text-align: center;">Chain Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="audit-logs-tbody" style="color: var(--text-secondary);">
+                                    <!-- Dynamic Audit Logs Rows -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
