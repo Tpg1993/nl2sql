@@ -4,6 +4,38 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
+## [v20_sarvam_federated_query_router](#v20_sarvam_federated_query_router) (Planned Branch)
+*   **Release Focus**: Federated Query Virtualization across multiple SQLite/Cloud Databricks databases.
+
+## [v19_sarvam_gitops_pr_sync](#v19_sarvam_gitops_pr_sync) (Planned Branch)
+*   **Release Focus**: GitOps PR sync automation directly from the Semantic Configurator console UI.
+
+## [v18_sarvam_explain_cost_guardrails](#v18_sarvam_explain_cost_guardrails) (Planned Branch)
+*   **Release Focus**: Explain-based cost safety query execution planners and DB optimizer checks.
+
+## [v17_sarvam_vector_metadata_rag](#v17_sarvam_vector_metadata_rag) (Planned Branch)
+*   **Release Focus**: Dense Vector-based Metadata RAG for scalable table schema lookup.
+
+## [v16_sarvam_dynamic_few_shot_rag](#v16_sarvam_dynamic_few_shot_rag) (Planned Branch)
+*   **Release Focus**: Dynamic Few-Shot RAG Query Library using embedding-based similarity matches.
+
+## [v15_sarvam_immutable_audit_ledger](#v15_sarvam_immutable_audit_ledger) (Planned Branch)
+*   **Release Focus**: HIPAA-compliant immutable audit logs.
+
+## [v14_sarvam_ast_safety_parser](#v14_sarvam_ast_safety_parser) (Planned Branch)
+*   **Release Focus**: Abstract Syntax Tree (AST) query structure parser for database write safety.
+
+## [v13_sarvam_interactive_semantic_builder](#v13_sarvam_interactive_semantic_builder) (Current Active Branch)
+*   **Release Focus**: Interactive Configurator Editor V2.
+*   **Auto-Discovery Integration**: Automatically parses schema relations and infers column classification rules from active DB.
+*   **JSON Config Import/Export**: Enables visual layout backups and migrations.
+*   **Metrics Compiler Checks**: Implements client-side dry-run test formula compiles.
+
+## [v12_sarvam_semantic_layer_editor](#v12_sarvam_semantic_layer_editor)
+*   **Release Focus**: Baseline config editor console endpoints.
+
+---
+
 ## [v11_sarvam_metadata_rag](#v11_sarvam_metadata_rag) (Current Branch)
 *   **Release Focus**: Metadata RAG & Large-Scale Schema Reflection.
 *   **Scalable Schema Reflection**: Replaces global listing and parsing of all database schemas with a dynamic `retrieve_schema_node` utilizing a custom `MetadataRAG` system. Ensures the agent scales gracefully to schemas with thousands of tables.
