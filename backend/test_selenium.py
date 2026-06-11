@@ -31,6 +31,17 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         
         cls.log("=== STARTING SELENIUM E2E INTEGRATION TESTS ===")
         
+        # Backup semantic_layer.yaml
+        cls.yaml_path = os.path.join(BASE_DIR, "semantic_layer.yaml")
+        cls.backup_path = os.path.join(BASE_DIR, "semantic_layer.yaml.backup")
+        if os.path.exists(cls.yaml_path):
+            try:
+                import shutil
+                shutil.copy2(cls.yaml_path, cls.backup_path)
+                cls.log("Successfully backed up semantic_layer.yaml.")
+            except Exception as e:
+                cls.log(f"WARNING: Could not backup semantic_layer.yaml: {e}")
+        
         # Clear the cache.db file to ensure fresh cache state isolation
         cache_db_path = os.path.abspath(os.path.join(BASE_DIR, "cache.db"))
         if os.path.exists(cache_db_path):
@@ -128,6 +139,16 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         if cls.frontend_log:
             cls.frontend_log.close()
             
+        # Restore semantic_layer.yaml
+        if hasattr(cls, "backup_path") and os.path.exists(cls.backup_path):
+            try:
+                import shutil
+                shutil.copy2(cls.backup_path, cls.yaml_path)
+                os.remove(cls.backup_path)
+                cls.log("Successfully restored semantic_layer.yaml.")
+            except Exception as e:
+                cls.log(f"WARNING: Could not restore semantic_layer.yaml: {e}")
+                
         cls.log("=== SELENIUM TESTING SUITE COMPLETED ===")
         cls.log_file.close()
 

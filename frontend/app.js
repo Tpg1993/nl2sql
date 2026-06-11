@@ -1007,6 +1007,24 @@ const settingsToggleBtn = document.getElementById("settings-toggle-btn");
 const closeSettingsBtn = document.getElementById("close-settings-btn");
 const saveSettingsBtn = document.getElementById("save-settings-btn");
 const settingsStatusMsg = document.getElementById("settings-status-msg");
+let settingsStatusTimeout = null;
+
+function showSettingsStatus(htmlContent, color = "var(--text-secondary)", autoHideMs = 0) {
+    if (settingsStatusTimeout) {
+        clearTimeout(settingsStatusTimeout);
+        settingsStatusTimeout = null;
+    }
+    if (settingsStatusMsg) {
+        settingsStatusMsg.style.display = "inline";
+        settingsStatusMsg.style.color = color;
+        settingsStatusMsg.innerHTML = htmlContent;
+        if (autoHideMs > 0) {
+            settingsStatusTimeout = setTimeout(() => {
+                settingsStatusMsg.style.display = "none";
+            }, autoHideMs);
+        }
+    }
+}
 
 // Initialize Settings toggle events
 if (settingsToggleBtn) {
@@ -1050,7 +1068,11 @@ tabButtons.forEach(btn => {
 
 async function openSettingsDrawer() {
     settingsOverlay.style.display = "flex";
-    settingsStatusMsg.style.display = "none";
+    if (settingsStatusTimeout) {
+        clearTimeout(settingsStatusTimeout);
+        settingsStatusTimeout = null;
+    }
+    if (settingsStatusMsg) settingsStatusMsg.style.display = "none";
     
     // Clear dynamic containers with a loader indicator
     document.getElementById("entities-list").innerHTML = `<div style="text-align:center; padding:32px; color:var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin fa-lg"></i> Loading configurations...</div>`;
@@ -1553,9 +1575,7 @@ function renderPolicies(policies) {
 if (saveSettingsBtn) {
     saveSettingsBtn.addEventListener("click", async () => {
         saveSettingsBtn.disabled = true;
-        settingsStatusMsg.style.display = "inline";
-        settingsStatusMsg.style.color = "var(--text-secondary)";
-        settingsStatusMsg.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Saving...`;
+        showSettingsStatus(`<i class="fa-solid fa-circle-notch fa-spin"></i> Saving...`, "var(--text-secondary)", 0);
         
         try {
             const configPayload = serializeConfigForm();
@@ -1574,19 +1594,13 @@ if (saveSettingsBtn) {
                 throw new Error(errData.detail || `HTTP ${response.status}`);
             }
             
-            settingsStatusMsg.style.color = "#4ADE80"; // success green
-            settingsStatusMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> Configurations saved & hot-reloaded!`;
+            showSettingsStatus(`<i class="fa-solid fa-circle-check"></i> Configurations saved & hot-reloaded!`, "#4ADE80", 5000);
             
             // Reload metadata in sidebar to reflect updates
             fetchSchemaMetadata();
-            
-            setTimeout(() => {
-                settingsStatusMsg.style.display = "none";
-            }, 5000);
         } catch (err) {
             console.error("Failed to save settings configurations:", err);
-            settingsStatusMsg.style.color = "#FCA5A5"; // error red
-            settingsStatusMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Error: ${err.message}`;
+            showSettingsStatus(`<i class="fa-solid fa-triangle-exclamation"></i> Error: ${err.message}`, "#FCA5A5", 0);
         } finally {
             saveSettingsBtn.disabled = false;
         }
@@ -1621,10 +1635,7 @@ if (discoverSchemaBtn) {
                 renderEntities(data.entities);
                 renderRelationships(data.relationships);
                 
-                settingsStatusMsg.style.display = "inline";
-                settingsStatusMsg.style.color = "#4ADE80";
-                settingsStatusMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> Schemas discovered successfully! Please review metrics & policies before saving.`;
-                setTimeout(() => { settingsStatusMsg.style.display = "none"; }, 5000);
+                showSettingsStatus(`<i class="fa-solid fa-circle-check"></i> Schemas discovered successfully! Please review metrics & policies before saving.`, "#4ADE80", 5000);
             }
         } catch (err) {
             console.error("Auto-discovery failed:", err);
