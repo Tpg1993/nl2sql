@@ -1255,6 +1255,16 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self.assertIn("Diabetology", table_text)
         self.log("-> SUCCESS: Verified table outputs containing unified clinical / department mappings.")
         
+        # Save screenshot of Federated Query Router result page
+        try:
+            screenshots_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots"))
+            os.makedirs(screenshots_dir, exist_ok=True)
+            screenshot_path = os.path.join(screenshots_dir, "16_Federated_Query_Router.png")
+            driver.save_screenshot(screenshot_path)
+            self.log(f"-> Captured Federated Query Router screenshot: {screenshot_path}")
+        except Exception as e:
+            self.log(f"-> Failed to capture Federated Query Router screenshot: {e}")
+            
         self._test_has_failed = False
         self.logout()
 
