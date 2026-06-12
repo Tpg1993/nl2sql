@@ -7,13 +7,19 @@ This document tracks the feature additions, database routing, model integrations
 ## [v20_sarvam_federated_query_router](#v20_sarvam_federated_query_router) (Planned Branch)
 *   **Release Focus**: Federated Query Virtualization across multiple SQLite/Cloud Databricks databases.
 
-## [v19_sarvam_gitops_pr_sync](#v19_sarvam_gitops_pr_sync) (Planned Branch)
+## [v19_sarvam_gitops_pr_sync](#v19_sarvam_gitops_pr_sync) (Current Active Branch)
 *   **Release Focus**: GitOps PR sync automation directly from the Semantic Configurator console UI.
+*   **Version Control Integration**: Integrates active branch retrieval and remote git target branch mapping options. Shows alerts if GITHUB_TOKEN credentials are missing.
+*   **Automated Pull Request Sync**: Stages, commits, and pushes configurations to the remote branch, opening a new Pull Request or updating an existing one via GitHub API call.
+*   **UI Integration & E2E Validation**: Adds a tab content panel inside the configurator settings drawer, and validates rendering, loading, and screenshots via Selenium test run (`test_16`).
 
-## [v18_sarvam_explain_cost_guardrails](#v18_sarvam_explain_cost_guardrails) (Planned Branch)
+## [v18_sarvam_explain_cost_guardrails](#v18_sarvam_explain_cost_guardrails)
 *   **Release Focus**: Explain-based cost safety query execution planners and DB optimizer checks.
+*   **Query Cost Estimation**: Runs pre-execution checks using `EXPLAIN QUERY PLAN` on all generated SQL queries, blocking executions estimated to exceed safe thresholds.
+*   **Bypass Groups RBAC**: Allows administrators to specify bypass groups (e.g. `doctor` role added to the `HighPerformanceQueryGroup`) that circumvent scan bounds.
+*   **Selenium Timing Race Fixes**: Resolves timing race issues in Selenium testing when switching roles and hot-reloading.
 
-## [v17_vector_metadata_rag](#v17_vector_metadata_rag) (Current Active Branch)
+## [v17_vector_metadata_rag](#v17_vector_metadata_rag)
 *   **Release Focus**: Dense Vector-based Metadata RAG for scalable table schema lookup.
 *   **Vector Search & Caching**: Transitioned table schema search from keyword matching to dense vector embeddings (`text-embedding-3-small`). Embeds all schemas on startup, caching them in memory for sub-millisecond retrieval latency.
 *   **Local TF-IDF Fallback**: Preserves offline compatibility by falling back to local TF-IDF Cosine similarity math if OpenAI API key is missing or request fails.

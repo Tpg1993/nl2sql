@@ -2147,6 +2147,115 @@ document.addEventListener("DOMContentLoaded", () => {
             verifyAuditChain();
         });
     }
+
+    const gitopsTabBtn = document.querySelector('button[data-tab="tab-gitops"]');
+    if (gitopsTabBtn) {
+        gitopsTabBtn.addEventListener("click", () => {
+            loadGitInfo();
+        });
+    }
+    
+    const gitopsSyncBtn = document.getElementById("gitops-sync-btn");
+    if (gitopsSyncBtn) {
+        gitopsSyncBtn.addEventListener("click", async () => {
+            const targetBranch = document.getElementById("gitops-target-branch").value;
+            const prTitle = document.getElementById("gitops-pr-title").value.trim();
+            const prDescription = document.getElementById("gitops-pr-description").value.trim();
+            
+            if (!targetBranch) {
+                alert("Please select a target base branch to merge into.");
+                return;
+            }
+            if (!prTitle) {
+                alert("Please specify a title for the Pull Request.");
+                return;
+            }
+            
+            gitopsSyncBtn.disabled = true;
+            const originalHTML = gitopsSyncBtn.innerHTML;
+            gitopsSyncBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Syncing...`;
+            showSettingsStatus(`<i class="fa-solid fa-circle-notch fa-spin"></i> Committing, pushing, and creating Pull Request...`, "var(--text-secondary)", 0);
+            
+            try {
+                const response = await fetch(`${API_BASE}/config/gitops/pr-sync`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...getAuthHeaders()
+                    },
+                    body: JSON.stringify({
+                        target_branch: targetBranch,
+                        pr_title: prTitle,
+                        pr_description: prDescription
+                    })
+                });
+                
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || `HTTP ${response.status}`);
+                }
+                
+                if (data.success) {
+                    showSettingsStatus(`<i class="fa-solid fa-circle-check"></i> ${data.message} <a href="${data.pr_url}" target="_blank" style="color: #60a5fa; text-decoration: underline; font-weight:600; margin-left: 4px;">View Pull Request <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.75rem;"></i></a>`, "#4ADE80", 0);
+                } else {
+                    throw new Error(data.detail || "PR creation failed.");
+                }
+            } catch (err) {
+                console.error("GitOps PR sync failed:", err);
+                showSettingsStatus(`<i class="fa-solid fa-triangle-exclamation"></i> Error: ${err.message}`, "#FCA5A5", 0);
+            } finally {
+                gitopsSyncBtn.disabled = false;
+                gitopsSyncBtn.innerHTML = originalHTML;
+            }
+        });
+    }
 });
+
+async function loadGitInfo() {
+    const activeBranchInput = document.getElementById("gitops-active-branch");
+    const targetBranchSelect = document.getElementById("gitops-target-branch");
+    const tokenWarning = document.getElementById("gitops-token-warning");
+    const syncBtn = document.getElementById("gitops-sync-btn");
+    
+    if (!activeBranchInput || !targetBranchSelect) return;
+    
+    activeBranchInput.value = "Loading...";
+    targetBranchSelect.innerHTML = `<option value="">-- Loading Branches --</option>`;
+    
+    try {
+        const response = await fetch(`${API_BASE}/config/git-info`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        if (data.success) {
+            activeBranchInput.value = data.active_branch;
+            
+            // Populate branch options
+            let optionsHtml = `<option value="">-- Select Target Branch --</option>`;
+            data.branches.forEach(b => {
+                if (b !== data.active_branch) {
+                    optionsHtml += `<option value="${b}">${b}</option>`;
+                }
+            });
+            targetBranchSelect.innerHTML = optionsHtml;
+            
+            // Show token warning if GITHUB_TOKEN is not configured
+            if (data.has_token) {
+                tokenWarning.style.display = "none";
+                syncBtn.disabled = false;
+                syncBtn.style.opacity = "1";
+            } else {
+                tokenWarning.style.display = "block";
+            }
+        }
+    } catch (err) {
+        console.error("Failed to load Git metadata:", err);
+        activeBranchInput.value = "Error loading branch";
+        targetBranchSelect.innerHTML = `<option value="">-- Error --</option>`;
+    }
+}
 
 

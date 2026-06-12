@@ -727,6 +727,180 @@ def verify_audit_ledger_endpoint(current_user: dict = Depends(get_current_user))
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/config/git-info")
+def get_git_info(current_user: dict = Depends(get_current_user)):
+    """Retrieves current Git status, active branch, and list of branches, restricted to administrators."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Only Administrators can view git information."
+        )
+    try:
+        import subprocess
+        # Get active branch
+        active_branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            text=True
+        ).strip()
+        
+        # Get list of branches (local & remote)
+        branch_output = subprocess.check_output(
+            ["git", "branch", "-a"],
+            text=True
+        )
+        branches = []
+        for line in branch_output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            name = line.lstrip("* ").strip()
+            if name.startswith("remotes/origin/"):
+                name = name[len("remotes/origin/"):]
+            if name == "HEAD" or "origin/HEAD" in name:
+                continue
+            if name not in branches:
+                branches.append(name)
+                
+        # Check if GITHUB_TOKEN is present in env
+        github_token = os.environ.get("GITHUB_TOKEN")
+        has_token = bool(github_token and github_token.strip() and not github_token.startswith("ghp_your_"))
+        
+        return {
+            "success": True,
+            "active_branch": active_branch,
+            "branches": branches,
+            "has_token": has_token
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Git metadata retrieval failed: {str(e)}")
+
+
+class GitOpsPRPayload(BaseModel):
+    target_branch: str
+    pr_title: str
+    pr_description: str
+
+
+@app.post("/api/config/gitops/pr-sync")
+def gitops_pr_sync(payload: GitOpsPRPayload, current_user: dict = Depends(get_current_user)):
+    """Stages, commits, pushes current semantic layer config, and creates a GitHub Pull Request."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Only Administrators can execute GitOps syncs."
+        )
+    
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if not github_token or not github_token.strip() or github_token.startswith("ghp_your_"):
+        raise HTTPException(
+            status_code=400,
+            detail="GITHUB_TOKEN is missing or not configured in backend/.env. Please define it to execute PR Sync."
+        )
+        
+    import subprocess
+    import urllib.request
+    import urllib.error
+    import json
+    
+    # 1. Parse Git remote origin URL to find owner & repo
+    try:
+        remote_url = subprocess.check_output(["git", "remote", "get-url", "origin"], text=True).strip()
+        if remote_url.endswith(".git"):
+            remote_url = remote_url[:-4]
+        if "github.com" in remote_url:
+            parts = remote_url.split("github.com")[-1].lstrip(":").lstrip("/").split("/")
+            if len(parts) >= 2:
+                owner, repo = parts[0], parts[1]
+            else:
+                raise Exception("Could not parse owner and repository from remote URL.")
+        else:
+            raise Exception("Git remote origin does not point to a GitHub repository.")
+    except Exception as ge:
+        raise HTTPException(status_code=500, detail=f"Failed to identify GitHub repository details: {str(ge)}")
+        
+    try:
+        # 2. Get active branch
+        active_branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            text=True
+        ).strip()
+        
+        if active_branch == payload.target_branch:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Target branch cannot be equal to the active branch ({active_branch})."
+            )
+            
+        # 3. Check for modification changes on backend/semantic_layer.yaml
+        status_output = subprocess.check_output(
+            ["git", "status", "--porcelain", "backend/semantic_layer.yaml"],
+            text=True
+        ).strip()
+        
+        if status_output:
+            subprocess.check_call(["git", "add", "backend/semantic_layer.yaml"])
+            subprocess.check_call(["git", "commit", "-m", f"chore: update semantic layer configuration via console ({payload.pr_title})"])
+            
+        # 4. Push active branch to remote
+        subprocess.check_call(["git", "push", "origin", active_branch])
+        
+        # 5. Create Pull Request via GitHub API
+        api_url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+        data = {
+            "title": payload.pr_title,
+            "body": payload.pr_description or "GitOps auto-sync of Semantic Layer from Admin dashboard.",
+            "head": active_branch,
+            "base": payload.target_branch
+        }
+        
+        req = urllib.request.Request(
+            api_url,
+            data=json.dumps(data).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {github_token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "FastAPI-GitOps-Agent",
+                "Content-Type": "application/json"
+            },
+            method="POST"
+        )
+        
+        try:
+            with urllib.request.urlopen(req) as response:
+                res_json = json.loads(response.read().decode("utf-8"))
+                return {
+                    "success": True,
+                    "pr_url": res_json.get("html_url"),
+                    "message": "Pull Request successfully created!"
+                }
+        except urllib.error.HTTPError as he:
+            err_body = he.read().decode("utf-8")
+            try:
+                err_json = json.loads(err_body)
+                errors = err_json.get("errors", [])
+                for err in errors:
+                    msg = err.get("message", "")
+                    if "A pull request already exists" in msg:
+                        return {
+                            "success": True,
+                            "pr_url": f"https://github.com/{owner}/{repo}/pulls",
+                            "message": "Latest configuration changes pushed. Pull Request already exists and was updated."
+                        }
+                raise HTTPException(status_code=400, detail=err_json.get("message", err_body))
+            except HTTPException as h_exc:
+                raise h_exc
+            except Exception:
+                raise HTTPException(status_code=400, detail=err_body)
+    except HTTPException as he:
+        raise he
+    except subprocess.CalledProcessError as cpe:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Git command failed: {cpe.output if hasattr(cpe, 'output') else str(cpe)}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GitOps execution error: {str(e)}")
 
 
 @app.get("/api/metadata")

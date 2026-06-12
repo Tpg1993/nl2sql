@@ -1127,5 +1127,63 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
+    def test_16_gitops_pr_sync(self):
+        self.log("[Test 16] Testing GitOps Pull Request synchronization tab and form...")
+        driver = self.driver
+        self.login("admin", ADMIN_PASSWORD)
+        
+        # Wait for connected
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # 1. Open settings configurator drawer
+        settings_btn = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.ID, "settings-toggle-btn"))
+        )
+        settings_btn.click()
+        WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.ID, "settings-overlay"))
+        )
+        
+        # 2. Click the new "GitOps PR Sync" tab button
+        gitops_tab_btn = driver.find_element(By.XPATH, "//button[@data-tab='tab-gitops']")
+        gitops_tab_btn.click()
+        time.sleep(1.5) # Wait for active branch and target dropdown to load
+        
+        # 3. Assert active branch input is loaded and populated
+        active_branch_input = driver.find_element(By.ID, "gitops-active-branch")
+        active_branch = active_branch_input.get_attribute("value")
+        self.assertIsNotNone(active_branch)
+        self.assertNotEqual(active_branch, "")
+        self.assertNotEqual(active_branch, "Loading...")
+        self.log(f"-> Active branch verified: '{active_branch}'")
+        
+        # 4. Check if dropdown is populated
+        target_select = driver.find_element(By.ID, "gitops-target-branch")
+        options = target_select.find_elements(By.TAG_NAME, "option")
+        # There should be at least the placeholder option
+        self.assertGreater(len(options), 0)
+        
+        # 5. Capture a screenshot of the GitOps PR Sync panel
+        try:
+            screenshots_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "screenshots"))
+            os.makedirs(screenshots_dir, exist_ok=True)
+            screenshot_path = os.path.join(screenshots_dir, "15_GitOps_PR_Sync_Tab.png")
+            driver.save_screenshot(screenshot_path)
+            self.log(f"-> Captured GitOps tab screenshot: {screenshot_path}")
+        except Exception as e:
+            self.log(f"-> Failed to capture GitOps tab screenshot: {e}")
+            
+        # 6. Close drawer
+        close_btn = driver.find_element(By.ID, "close-settings-btn")
+        close_btn.click()
+        WebDriverWait(driver, 5).until(
+            EC.invisibility_of_element_located((By.ID, "settings-overlay"))
+        )
+        
+        self._test_has_failed = False
+        self.logout()
+
 if __name__ == "__main__":
     unittest.main()

@@ -70,3 +70,8 @@ This folder contains the visual execution proof and user interface states for th
 * **Filename**: `14_Cost_Safety_Bypass_Success.png`
 * **Functionality**: When an approved role (e.g. `doctor`, who was added to the `HighPerformanceQueryGroup` by the admin) runs the exact same heavy query, the execution planner bypasses the safety guardrails, executing it and rendering the dynamic results table.
 * **E2E Tests**: Verified via Selenium automated testing (`test_15`). ✅
+
+## 15. GitOps Pull Request Synchronization Tab
+* **Filename**: `15_GitOps_PR_Sync_Tab.png`
+* **Functionality**: Renders active branch metadata and lists all other local and remote repository branches as target base branch merge destinations. Displays PR Title and Description textareas, and alerts if `GITHUB_TOKEN` credentials are unconfigured.
+* **E2E Tests**: Verified via Selenium automated testing (`test_16`). ✅

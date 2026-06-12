@@ -196,6 +196,7 @@
                     <button class="settings-tab-btn" data-tab="tab-policies">Policies</button>
                     <button class="settings-tab-btn" data-tab="tab-groups">Bypass Groups</button>
                     <button class="settings-tab-btn" data-tab="tab-audit-logs">Audit Logs</button>
+                    <button class="settings-tab-btn" data-tab="tab-gitops">GitOps PR Sync</button>
                 </div>
                 
                 <div class="settings-content-container">
@@ -284,6 +285,49 @@
                                     <!-- Dynamic Audit Logs Rows -->
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                    
+                    <!-- GitOps PR Sync Tab -->
+                    <div class="settings-tab-content" id="tab-gitops">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <h3>GitOps Pull Request Sync</h3>
+                        </div>
+                        <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 6px;">
+                            <span style="font-weight:600; color: #60a5fa;"><i class="fa-solid fa-code-pull-request"></i> Version Control Integration:</span> Commit the active on-disk configuration, push to the remote repository, and automatically open a GitHub Pull Request.
+                        </div>
+                        
+                        <div class="gitops-container" style="display: flex; flex-direction: column; gap: 12px; max-width: 500px; margin-top: 10px;">
+                            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Active Git Branch</label>
+                                <input type="text" id="gitops-active-branch" class="form-input" readonly style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); padding: 8px 12px; border-radius: 6px; color: var(--text-primary); font-size: 0.85rem; font-family: monospace; outline: none; cursor: not-allowed;" />
+                            </div>
+                            
+                            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Base Target Branch (Merge Into)</label>
+                                <select id="gitops-target-branch" class="form-select" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; color: var(--text-primary); font-size: 0.85rem; outline: none; cursor: pointer;">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                            
+                            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Pull Request Title</label>
+                                <input type="text" id="gitops-pr-title" class="form-input" value="GitOps Sync: Update Semantic Layer Configuration" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; color: var(--text-primary); font-size: 0.85rem; outline: none;" />
+                            </div>
+                            
+                            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Description / Comments</label>
+                                <textarea id="gitops-pr-description" class="form-textarea" rows="3" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; color: var(--text-primary); font-size: 0.85rem; outline: none; resize: vertical;" placeholder="GitOps auto-sync of Semantic Layer from Admin dashboard.">GitOps auto-sync of Semantic Layer from Admin dashboard.</textarea>
+                            </div>
+                            
+                            <div id="gitops-token-warning" style="display: none; padding: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 6px; font-size: 0.75rem; color: #fca5a5; line-height: 1.4;">
+                                <i class="fa-solid fa-triangle-exclamation" style="margin-right: 4px; color: #ef4444;"></i>
+                                <strong>Warning:</strong> GITHUB_TOKEN is not configured in <code>backend/.env</code>. Pull Request creation will fail. Please define it to proceed.
+                            </div>
+                            
+                            <button class="save-settings-btn" id="gitops-sync-btn" style="align-self: flex-start; padding: 10px 16px; background: var(--primary); border: none; border-radius: 6px; color: white; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: 0.2s;">
+                                <i class="fa-solid fa-cloud-arrow-up"></i> Push & Create Pull Request
+                            </button>
                         </div>
                     </div>
                 </div>
