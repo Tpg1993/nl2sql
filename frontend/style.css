@@ -2055,6 +2055,66 @@ body[data-theme="light"] .audit-logs-table-container td {
     color: #475569;
 }
 
+/* =====================================================================
+   QUERY OPTIMIZER DETAILS STYLING
+   ===================================================================== */
+.optimizer-details-container {
+    margin-top: 12px;
+    border-top: 1px dashed var(--border-glass);
+    padding-top: 12px;
+}
 
+.optimizer-details {
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-glass);
+    border-radius: 8px;
+    overflow: visible;
+    transition: var(--transition-smooth);
+}
 
+.optimizer-details summary {
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    list-style: none; /* Hide default arrow */
+}
 
+.optimizer-details summary::-webkit-details-marker {
+    display: none; /* Hide default arrow in safari */
+}
+
+.optimizer-details summary:hover {
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.optimizer-details summary .summary-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.optimizer-details summary .summary-title i {
+    color: #38bdf8;
+}
+
+.optimizer-details summary .summary-arrow {
+    font-size: 0.7rem;
+    transition: transform 0.2s ease;
+    color: var(--text-muted);
+}
+
+.optimizer-details[open] summary .summary-arrow {
+    transform: rotate(180deg);
+}
+
+.optimizer-stats-content {
+    border-top: 1px solid var(--border-glass);
+    background-color: rgba(0, 0, 0, 0.1);
+    animation: slideDownCollapse 0.2s ease-out;
+}

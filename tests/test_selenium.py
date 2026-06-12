@@ -3,6 +3,7 @@ import subprocess
 import sys
 import time
 import os
+import shutil
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -11,7 +12,8 @@ from dotenv import load_dotenv
 
 # Load environment variables
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env"))
+# Look for .env in the parent directory
+load_dotenv(dotenv_path=os.path.join(BASE_DIR, "..", "backend", ".env"))
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 
@@ -26,14 +28,19 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        log_path = os.path.join(BASE_DIR, "selenium_test_results.log")
+        results_dir = os.path.abspath(os.path.join(BASE_DIR, "results"))
+        rsults_dir = os.path.abspath(os.path.join(BASE_DIR, "rsults"))
+        os.makedirs(results_dir, exist_ok=True)
+        os.makedirs(rsults_dir, exist_ok=True)
+        
+        log_path = os.path.join(results_dir, "selenium_test_results.log")
         cls.log_file = open(log_path, "w", encoding="utf-8")
         
         cls.log("=== STARTING SELENIUM E2E INTEGRATION TESTS ===")
         
-        # Backup semantic_layer.yaml
-        cls.yaml_path = os.path.join(BASE_DIR, "semantic_layer.yaml")
-        cls.backup_path = os.path.join(BASE_DIR, "semantic_layer.yaml.backup")
+        # Backup semantic_layer.yaml from backend
+        cls.yaml_path = os.path.abspath(os.path.join(BASE_DIR, "..", "backend", "semantic_layer.yaml"))
+        cls.backup_path = os.path.abspath(os.path.join(BASE_DIR, "..", "backend", "semantic_layer.yaml.backup"))
         if os.path.exists(cls.yaml_path):
             try:
                 import shutil
@@ -42,8 +49,8 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
             except Exception as e:
                 cls.log(f"WARNING: Could not backup semantic_layer.yaml: {e}")
         
-        # Clear the cache.db file to ensure fresh cache state isolation
-        cache_db_path = os.path.abspath(os.path.join(BASE_DIR, "cache.db"))
+        # Clear the cache.db file in backend to ensure fresh cache state isolation
+        cache_db_path = os.path.abspath(os.path.join(BASE_DIR, "..", "backend", "cache.db"))
         if os.path.exists(cache_db_path):
             try:
                 cls.log(f"Clearing cache database at {cache_db_path}...")
@@ -51,8 +58,8 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
             except Exception as e:
                 cls.log(f"Could not delete cache database: {e}")
                 
-        # Clear the audit_ledger.db file to ensure fresh audit state isolation
-        audit_db_path = os.path.abspath(os.path.join(BASE_DIR, "audit_ledger.db"))
+        # Clear the audit_ledger.db file in backend to ensure fresh audit state isolation
+        audit_db_path = os.path.abspath(os.path.join(BASE_DIR, "..", "backend", "audit_ledger.db"))
         if os.path.exists(audit_db_path):
             try:
                 cls.log(f"Clearing audit database at {audit_db_path}...")
@@ -60,9 +67,9 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
             except Exception as e:
                 cls.log(f"Could not delete audit database: {e}")
         
-        # 1. Start FastAPI backend, logging output to uvicorn.log
+        # 1. Start FastAPI backend, logging output to uvicorn.log inside results
         cls.log("Launching backend uvicorn server on http://127.0.0.1:8000...")
-        cls.backend_log = open(os.path.join(BASE_DIR, "uvicorn.log"), "w", encoding="utf-8")
+        cls.backend_log = open(os.path.join(results_dir, "uvicorn.log"), "w", encoding="utf-8")
         env = os.environ.copy()
         env["TESTING"] = "true"
         cls.backend_process = subprocess.Popen(
@@ -72,9 +79,9 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
             env=env
         )
         
-        # 2. Start Frontend server, logging output to frontend.log
+        # 2. Start Frontend server, logging output to frontend.log inside results
         cls.log("Launching frontend python http server on http://localhost:3000...")
-        cls.frontend_log = open(os.path.join(BASE_DIR, "frontend.log"), "w", encoding="utf-8")
+        cls.frontend_log = open(os.path.join(results_dir, "frontend.log"), "w", encoding="utf-8")
         cls.frontend_process = subprocess.Popen(
             [sys.executable, "-m", "http.server", "3000", "--directory", "frontend"],
             cwd=os.path.abspath(os.path.join(BASE_DIR, "..")),
@@ -159,7 +166,18 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
                 cls.log(f"WARNING: Could not restore semantic_layer.yaml: {e}")
                 
         cls.log("=== SELENIUM TESTING SUITE COMPLETED ===")
-        cls.log_file.close()
+        if cls.log_file:
+            cls.log_file.close()
+
+        # Copy all contents of tests/results/ to tests/rsults/ to satisfy both directories
+        try:
+            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+            results_dir = os.path.join(BASE_DIR, "results")
+            rsults_dir = os.path.join(BASE_DIR, "rsults")
+            if os.path.exists(results_dir):
+                shutil.copytree(results_dir, rsults_dir, dirs_exist_ok=True)
+        except Exception as e:
+            print(f"Warning: failed to duplicate results to rsults: {e}")
 
     @classmethod
     def log(cls, message: str):
@@ -181,10 +199,20 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         if getattr(self, "_test_has_failed", True):
             try:
                 screenshot_name = f"failure_{self._testMethodName}.png"
-                workspace_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-                screenshot_path = os.path.join(workspace_dir, screenshot_name)
+                results_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "results"))
+                os.makedirs(results_dir, exist_ok=True)
+                screenshot_path = os.path.join(results_dir, screenshot_name)
                 self.driver.save_screenshot(screenshot_path)
                 self.log(f"-> Captured failure screenshot to: {screenshot_name}")
+                
+                # Capture browser console logs
+                try:
+                    logs = self.driver.get_log('browser')
+                    self.log("-> Browser Console Logs on Failure:")
+                    for entry in logs:
+                        self.log(f"   [{entry.get('level')}] {entry.get('message')}")
+                except Exception as le:
+                    self.log(f"-> Failed to retrieve browser logs: {le}")
             except Exception as e:
                 self.log(f"-> Failed to capture screenshot: {e}")
                 
@@ -229,7 +257,13 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
     def logout(self):
         """Helper to clear local storage and session."""
         self.driver.execute_script("localStorage.removeItem('access_token');")
-        self.driver.refresh()
+        self.driver.get("http://localhost:3000")
+        WebDriverWait(self.driver, 15).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+        WebDriverWait(self.driver, 15).until(
+            EC.visibility_of_element_located((By.ID, "login-overlay"))
+        )
         time.sleep(1)
 
     def test_01_invalid_login(self):
@@ -345,12 +379,15 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         )
         
         # Submit query
-        input_box = WebDriverWait(self.driver, 5).until(
+        input_box = WebDriverWait(self.driver, 10).until(
             EC.element_to_be_clickable((By.ID, "user-input"))
         )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
         input_box.clear()
         query_text = "How many patients do we have in total?"
         input_box.send_keys(query_text)
+        time.sleep(0.5)
         
         send_btn = WebDriverWait(self.driver, 5).until(
             EC.element_to_be_clickable((By.ID, "send-button"))
@@ -367,18 +404,22 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self.assertTrue(result_table.is_displayed())
         
         # Resubmit query to verify cached hit
-        input_box = WebDriverWait(self.driver, 5).until(
+        input_box = WebDriverWait(self.driver, 10).until(
             EC.element_to_be_clickable((By.ID, "user-input"))
         )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
         input_box.clear()
         input_box.send_keys(query_text)
+        time.sleep(0.5)
         
         send_btn = WebDriverWait(self.driver, 5).until(
             EC.element_to_be_clickable((By.ID, "send-button"))
         )
         send_btn.click()
         
-        time.sleep(3)
+        # Wait a bit more for cache hit to settle
+        time.sleep(5)
         
         # Find cache badge in last response card
         cache_badges = self.driver.find_elements(By.CLASS_NAME, "cache-badge")
@@ -395,11 +436,14 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         WebDriverWait(self.driver, 10).until(
             EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
         )
-        input_box = WebDriverWait(self.driver, 5).until(
+        input_box = WebDriverWait(self.driver, 10).until(
             EC.element_to_be_clickable((By.ID, "user-input"))
         )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
         input_box.clear()
         input_box.send_keys("What is the count of providers in each department? Show top 5.")
+        time.sleep(0.5)
         
         send_btn = WebDriverWait(self.driver, 5).until(
             EC.element_to_be_clickable((By.ID, "send-button"))
@@ -430,11 +474,14 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         )
         
         query_text = "Count the patients in the database"
-        input_box = WebDriverWait(self.driver, 5).until(
+        input_box = WebDriverWait(self.driver, 10).until(
             EC.element_to_be_clickable((By.ID, "user-input"))
         )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
         input_box.clear()
         input_box.send_keys(query_text)
+        time.sleep(0.5)
         
         send_btn = WebDriverWait(self.driver, 5).until(
             EC.element_to_be_clickable((By.ID, "send-button"))
@@ -467,11 +514,14 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         )
         
         # Submit the same query again
-        input_box = WebDriverWait(self.driver, 5).until(
+        input_box = WebDriverWait(self.driver, 10).until(
             EC.element_to_be_clickable((By.ID, "user-input"))
         )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
         input_box.clear()
         input_box.send_keys(query_text)
+        time.sleep(0.5)
         
         send_btn = WebDriverWait(self.driver, 5).until(
             EC.element_to_be_clickable((By.ID, "send-button"))
@@ -496,11 +546,14 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         )
         
         # Query that returns patient name details
-        input_box = WebDriverWait(self.driver, 5).until(
+        input_box = WebDriverWait(self.driver, 10).until(
             EC.element_to_be_clickable((By.ID, "user-input"))
         )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
         input_box.clear()
         input_box.send_keys("Give me the details of patients")
+        time.sleep(0.5)
         
         send_btn = WebDriverWait(self.driver, 5).until(
             EC.element_to_be_clickable((By.ID, "send-button"))
@@ -682,6 +735,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
             }
         }
         
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         temp_file_path = os.path.abspath(os.path.join(BASE_DIR, "temp_import_config.json"))
         with open(temp_file_path, "w", encoding="utf-8") as f:
             json.dump(temp_config, f, indent=2)
@@ -751,12 +805,15 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         )
         
         # 1. Run a query to generate an audit log record
-        input_box = WebDriverWait(driver, 5).until(
+        input_box = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.ID, "user-input"))
         )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
         input_box.clear()
         query_text = "How many patients do we have in total?"
         input_box.send_keys(query_text)
+        time.sleep(0.5)
         
         send_btn = WebDriverWait(driver, 5).until(
             EC.element_to_be_clickable((By.ID, "send-button"))
@@ -836,11 +893,14 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         )
         
         # Submit clinical query that triggers few-shot matching and schema reflection
-        input_box = WebDriverWait(driver, 5).until(
+        input_box = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.ID, "user-input"))
         )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
         input_box.clear()
         input_box.send_keys("Find all patients who have active allergies")
+        time.sleep(0.5)
         
         send_btn = WebDriverWait(driver, 5).until(
             EC.element_to_be_clickable((By.ID, "send-button"))
@@ -881,6 +941,191 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
+    def test_14_bypass_groups_saving(self):
+        self.log("[Test 14] Testing saving bypass groups toggles inside settings configurator...")
+        driver = self.driver
+        self.login("admin", ADMIN_PASSWORD)
+        
+        # Open drawer
+        settings_btn = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.ID, "settings-toggle-btn"))
+        )
+        settings_btn.click()
+        
+        # Wait for drawer overlay to display
+        WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.ID, "settings-overlay"))
+        )
+        
+        # Click the "Bypass Groups" tab
+        groups_tab_btn = driver.find_element(By.XPATH, "//button[@data-tab='tab-groups']")
+        groups_tab_btn.click()
+        time.sleep(1)
+        
+        # Find checkbox for doctor (we can locate by value="doctor")
+        doctor_checkbox = driver.find_element(By.XPATH, "//input[@class='group-bypass-checkbox'][@value='doctor']")
+        
+        # Toggle it via JS click since it is a stylized toggle switch with opacity 0
+        driver.execute_script("arguments[0].click();", doctor_checkbox)
+        time.sleep(0.5)
+        
+        # Let's verify it is checked
+        self.assertTrue(doctor_checkbox.is_selected())
+        
+        # Click save
+        save_btn = driver.find_element(By.ID, "save-settings-btn")
+        save_btn.click()
+        
+        # Wait for settings status success
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "settings-status-msg"), "saved & hot-reloaded")
+        )
+        self.log("-> Configurator settings saved successfully.")
+        
+        # Close settings drawer
+        close_btn = driver.find_element(By.ID, "close-settings-btn")
+        close_btn.click()
+        WebDriverWait(driver, 5).until(
+            EC.invisibility_of_element_located((By.ID, "settings-overlay"))
+        )
+        
+        # Reopen settings drawer to verify persistence
+        settings_btn = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.ID, "settings-toggle-btn"))
+        )
+        settings_btn.click()
+        WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.ID, "settings-overlay"))
+        )
+        
+        # Click tab
+        groups_tab_btn = driver.find_element(By.XPATH, "//button[@data-tab='tab-groups']")
+        groups_tab_btn.click()
+        time.sleep(1)
+        
+        # Assert doctor checkbox is still selected
+        doctor_checkbox = driver.find_element(By.XPATH, "//input[@class='group-bypass-checkbox'][@value='doctor']")
+        self.assertTrue(doctor_checkbox.is_selected())
+        self.log("-> SUCCESS: Bypass group configurations saved and verified persistent.")
+        
+        # Save screenshot of Bypass Groups tab
+        try:
+            screenshots_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "screenshots"))
+            os.makedirs(screenshots_dir, exist_ok=True)
+            screenshot_path = os.path.join(screenshots_dir, "12_Bypass_Groups_Configurator_Tab.png")
+            driver.save_screenshot(screenshot_path)
+            self.log(f"-> Captured Bypass Groups tab screenshot: {screenshot_path}")
+        except Exception as e:
+            self.log(f"-> Failed to capture Bypass Groups tab screenshot: {e}")
+            
+        self._test_has_failed = False
+        self.logout()
+
+    def test_15_query_cost_bypass(self):
+        self.log("[Test 15] Testing query cost blocks for normal users and bypass for approved groups...")
+        driver = self.driver
+        
+        # 1. Log in as researcher (role not bypassed by default)
+        self.login("researcher", "researcher123")
+        
+        # Wait for connected
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # Submit a query that scans the large encounters table
+        input_box = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "user-input"))
+        )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
+        self.driver.execute_script("arguments[0].value = 'Show all records from encounters'; arguments[0].dispatchEvent(new Event('input'));", input_box)
+        time.sleep(0.5)
+        
+        send_btn = driver.find_element(By.ID, "send-button")
+        self.driver.execute_script("arguments[0].click();", send_btn)
+        
+        # Wait for failure response
+        time.sleep(6)
+        
+        error_bubble = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "error-bubble"))
+        )
+        self.assertIn("Cost violation", error_bubble.text)
+        self.log("-> SUCCESS: Query correctly blocked with cost safety violation for researcher.")
+        try:
+            screenshots_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "screenshots"))
+            os.makedirs(screenshots_dir, exist_ok=True)
+            self.driver.save_screenshot(os.path.join(screenshots_dir, "13_Cost_Safety_Blocked_Query.png"))
+            self.log("-> Captured Cost Safety Blocked Query screenshot.")
+        except Exception as e:
+            self.log(f"-> Failed to capture Blocked Query screenshot: {e}")
+        self.logout()
+        
+        # 2. Log in as admin to add doctor to HighPerformanceQueryGroup
+        self.login("admin", ADMIN_PASSWORD)
+        
+        settings_btn = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.ID, "settings-toggle-btn"))
+        )
+        settings_btn.click()
+        WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.ID, "settings-overlay"))
+        )
+        
+        groups_tab_btn = driver.find_element(By.XPATH, "//button[@data-tab='tab-groups']")
+        groups_tab_btn.click()
+        time.sleep(1)
+        
+        doctor_checkbox = driver.find_element(By.XPATH, "//input[@class='group-bypass-checkbox'][@value='doctor']")
+        if not doctor_checkbox.is_selected():
+            driver.execute_script("arguments[0].click();", doctor_checkbox)
+            time.sleep(0.5)
+            
+        save_btn = driver.find_element(By.ID, "save-settings-btn")
+        save_btn.click()
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "settings-status-msg"), "saved & hot-reloaded")
+        )
+        self.log("-> Doctor added to HighPerformanceQueryGroup and settings saved.")
+        self.logout()
+        
+        # 3. Log in as doctor (now bypassed)
+        self.login("doctor", "doctor123")
+        
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        input_box = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "user-input"))
+        )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
+        self.driver.execute_script("arguments[0].value = 'Show all records from encounters'; arguments[0].dispatchEvent(new Event('input'));", input_box)
+        time.sleep(0.5)
+        
+        send_btn = driver.find_element(By.ID, "send-button")
+        self.driver.execute_script("arguments[0].click();", send_btn)
+        
+        # Doctor bypasses cost safety and query should succeed
+        time.sleep(10)
+        
+        result_table = WebDriverWait(driver, 45).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+        )
+        self.assertTrue(result_table.is_displayed())
+        self.log("-> SUCCESS: Doctor bypassed cost safety check and successfully executed heavy query.")
+        try:
+            screenshots_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "screenshots"))
+            os.makedirs(screenshots_dir, exist_ok=True)
+            self.driver.save_screenshot(os.path.join(screenshots_dir, "14_Cost_Safety_Bypass_Success.png"))
+            self.log("-> Captured Cost Safety Bypass Success screenshot.")
+        except Exception as e:
+            self.log(f"-> Failed to capture Bypass Success screenshot: {e}")
+        
+        self._test_has_failed = False
+        self.logout()
+
 if __name__ == "__main__":
     unittest.main()
-

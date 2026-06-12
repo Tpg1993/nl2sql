@@ -219,7 +219,7 @@ async function submitQuestion(question) {
         
         const data = await response.json();
         if (data.success) {
-            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries, data.is_expert_matched, data.lineage, data.estimated_cost, question, data.retrieved_tables, data.rag_savings_pct, data.retrieved_few_shots);
+            appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries, data.is_expert_matched, data.lineage, data.estimated_cost, question, data.retrieved_tables, data.rag_savings_pct, data.retrieved_few_shots, data.scan_breakdown, data.optimizer_advisories, data.raw_plan);
         } else {
             appendAssistantError(data.error || "An error occurred during query generation.");
         }
@@ -372,7 +372,12 @@ function highlightSQL(sql) {
 }
 
 // Append Assistant Success Response bubble (SQL, Table, and Tokens)
-function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null, model = "gpt-4o-mini", retries = 0, isExpertMatched = false, lineage = {}, estimatedCost = 0.0, questionText = "", retrievedTables = [], ragSavingsPct = 0.0, retrievedFewShots = []) {
+function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, summary = "", latencyMs = null, latencyBreakdown = null, model = "gpt-4o-mini", retries = 0, isExpertMatched = false, lineage = {}, estimatedCost = 0.0, questionText = "", retrievedTables = [], ragSavingsPct = 0.0, retrievedFewShots = [], scanBreakdown = [], optimizerAdvisories = [], rawPlan = "") {
+    const safeScanBreakdown = scanBreakdown || [];
+    const safeOptimizerAdvisories = optimizerAdvisories || [];
+    const safeRawPlan = rawPlan || "";
+    const safeEstimatedCost = (estimatedCost !== null && estimatedCost !== undefined) ? parseFloat(estimatedCost) : 0.0;
+
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
@@ -480,7 +485,7 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                         : `<span class="meta-item"><i class="fa-solid fa-check-double"></i> Retries: <strong>0</strong></span>`
                     }
                     <span class="meta-item cost-badge">
-                        <i class="fa-solid fa-coins"></i> Cost Units: <strong>${estimatedCost.toFixed(1)}</strong>
+                        <i class="fa-solid fa-coins"></i> Cost Units: <strong>${safeEstimatedCost.toFixed(1)}</strong>
                     </span>
                     ${isExpertMatched 
                         ? `<span class="meta-item expert-badge"><i class="fa-solid fa-user-check"></i> Expert Approved</span>` 
@@ -668,6 +673,76 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                             <span>Cost Saved: <strong>100%</strong> (Fast response served from cache)</span>
                         </div>
                         ` : ''}
+                    </details>
+                </div>
+                ` : ''}
+
+                ${(safeScanBreakdown && safeScanBreakdown.length > 0) || (safeOptimizerAdvisories && safeOptimizerAdvisories.length > 0) || safeRawPlan ? `
+                <div class="optimizer-details-container" style="margin-top: 10px;">
+                    <details class="optimizer-details" style="background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px;">
+                        <summary style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; cursor: pointer; user-select: none; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">
+                            <span class="summary-title" style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-gauge-high" style="color: #38bdf8;"></i> Query Optimizer & Cost Analysis
+                            </span>
+                            <i class="fa-solid fa-chevron-down summary-arrow" style="font-size: 0.75rem; transition: transform 0.2s;"></i>
+                        </summary>
+                        <div class="optimizer-stats-content" style="padding: 0 14px 14px 14px;">
+                            <!-- Scan Breakdown and Cumulative Scan Cost -->
+                            <div style="margin-bottom: 12px; padding-top: 10px; border-top: 1px dashed rgba(255, 255, 255, 0.1);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <span style="font-size: 0.8rem; color: var(--text-secondary);"><i class="fa-solid fa-chart-line"></i> Cumulative Scan Cost:</span>
+                                    <span style="font-size: 0.85rem; font-weight: 700; color: #f59e0b;">
+                                        ${safeScanBreakdown.length > 0 ? safeScanBreakdown.reduce((sum, item) => sum + item.estimated_rows, 0) : 0} Rows Scanned
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <!-- Table-by-table scans -->
+                            ${safeScanBreakdown && safeScanBreakdown.length > 0 ? `
+                            <div style="margin-bottom: 12px;">
+                                <h4 style="margin: 0 0 6px 0; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">Table Scan Breakdown</h4>
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    ${safeScanBreakdown.map(item => `
+                                        <div class="scan-item-card" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 6px; padding: 8px 10px; font-size: 0.75rem;">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <i class="fa-solid fa-table" style="color: #60a5fa;"></i>
+                                                <span style="font-family: monospace; font-weight: 600; color: var(--text-primary);">${item.table}</span>
+                                                <span class="scan-type-badge ${item.type === 'Full Table Scan' ? 'scan-full' : 'scan-index'}" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; ${item.type === 'Full Table Scan' ? 'background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);' : 'background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);'}">${item.type}</span>
+                                            </div>
+                                            <span style="font-weight: 600; color: var(--text-secondary);">${item.estimated_rows} rows</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            ` : `<div style="font-size:0.75rem; color: var(--text-muted); font-style:italic; margin-bottom: 12px;">No table scan operations found.</div>`}
+
+                            <!-- Missing Index Warnings / Advisories -->
+                            ${safeOptimizerAdvisories && safeOptimizerAdvisories.length > 0 ? `
+                            <div style="margin-bottom: 12px;">
+                                <h4 style="margin: 0 0 6px 0; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; display: flex; align-items: center; gap: 4px;"><i class="fa-solid fa-triangle-exclamation" style="color: #f59e0b;"></i> Missing Index Optimizer Suggestions</h4>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    ${safeOptimizerAdvisories.map(adv => `
+                                        <div class="advisory-card" style="background: rgba(245, 158, 11, 0.04); border: 1px solid rgba(245, 158, 11, 0.15); border-radius: 6px; padding: 10px; font-size: 0.75rem;">
+                                            <div style="font-weight: 600; color: #f3f4f6; margin-bottom: 4px;">Index Advisory on table <code style="color: #f59e0b; font-family: monospace;">${adv.table}</code>:</div>
+                                            <div style="color: var(--text-secondary); margin-bottom: 6px; line-height: 1.3;">${adv.reason}</div>
+                                            <div style="background: rgba(0, 0, 0, 0.3); padding: 6px 8px; border-radius: 4px; font-family: monospace; color: #60a5fa; border: 1px solid rgba(255, 255, 255, 0.05); display: flex; justify-content: space-between; align-items: center;">
+                                                <code>${adv.suggestion}</code>
+                                                <button class="copy-advisory-btn" onclick="navigator.clipboard.writeText('${adv.suggestion.replace(/'/g, "\\'") }'); alert('Copied index recommendation!');" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 0.75rem;"><i class="fa-regular fa-copy"></i></button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            ` : ''}
+
+                            <!-- Raw Execution Plan -->
+                            ${safeRawPlan ? `
+                            <div>
+                                <h4 style="margin: 0 0 6px 0; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">Raw SQL EXPLAIN Plan</h4>
+                                <pre class="raw-plan-box" style="margin: 0; background: rgba(0, 0, 0, 0.3); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.05); overflow-x: auto; font-family: monospace; font-size: 0.7rem; color: #9ca3af; white-space: pre-wrap; line-height: 1.4;"><code>${safeRawPlan}</code></pre>
+                            </div>
+                            ` : ''}
+                        </div>
                     </details>
                 </div>
                 ` : ''}
@@ -1095,6 +1170,7 @@ async function openSettingsDrawer() {
     document.getElementById("relationships-list").innerHTML = "";
     document.getElementById("metrics-list").innerHTML = "";
     document.getElementById("policies-container").innerHTML = "";
+    document.getElementById("groups-list-container").innerHTML = "";
 
     try {
         const response = await fetch(`${API_BASE}/config/semantic-layer`, {
@@ -1114,6 +1190,7 @@ async function openSettingsDrawer() {
             renderRelationships(activeConfig.relationships);
             renderMetrics(activeConfig.metrics);
             renderPolicies(activeConfig.security_policies);
+            renderBypassGroups(activeConfig.security_policies);
         } else {
             alert("Failed to retrieve configurator configurations: " + (data.error || "Unknown error"));
         }
@@ -1585,6 +1662,72 @@ function renderPolicies(policies) {
     });
 }
 
+function renderBypassGroups(securityPolicies) {
+    const container = document.getElementById("groups-list-container");
+    if (!container) return;
+    
+    container.innerHTML = "";
+    
+    // Ensure structure exists
+    const hpGroups = securityPolicies.high_performance_groups || {};
+    const bypassRoles = hpGroups.HighPerformanceQueryGroup || [];
+    
+    // Get all roles in the system
+    const rolesList = Object.keys(securityPolicies.roles || { researcher: {}, doctor: {} });
+    
+    rolesList.forEach(role => {
+        // Skip admin since admin is already unrestricted and bypasses cost check by default
+        if (role === "admin") return;
+        
+        const isBypassed = bypassRoles.includes(role);
+        
+        const row = document.createElement("div");
+        row.className = "group-bypass-row";
+        row.style = "display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px;";
+        row.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="fa-solid fa-users" style="color: #a78bfa; font-size: 1rem;"></i>
+                <div>
+                    <strong style="text-transform: capitalize; color: var(--text-primary); font-size: 0.9rem;">${role}</strong>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                        ${role === "doctor" ? "Clinical practitioner group (ABAC filtered)" : "Research analyst group (PII masked)"}
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 0.75rem; font-weight: 500; color: ${isBypassed ? '#34d399' : 'var(--text-muted)'};" class="bypass-status-label">${isBypassed ? 'Cost Bypass Approved' : 'Cost Safety Checked'}</span>
+                <label class="switch-toggle" style="position: relative; display: inline-block; width: 40px; height: 20px; cursor: pointer;">
+                    <input type="checkbox" class="group-bypass-checkbox" value="${role}" ${isBypassed ? 'checked' : ''} style="opacity: 0; width: 0; height: 0;" onchange="updateBypassCheckboxLabel(this)" />
+                    <span class="slider-toggle" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${isBypassed ? '#34d399' : 'rgba(255,255,255,0.1)'}; transition: .3s; border-radius: 20px;">
+                        <span class="slider-knob" style="position: absolute; content: ''; height: 14px; width: 14px; left: ${isBypassed ? '22px' : '3px'}; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%;"></span>
+                    </span>
+                </label>
+            </div>
+        `;
+        container.appendChild(row);
+    });
+}
+
+// Global helper so toggling checkboxes dynamically updates UI color/labels
+window.updateBypassCheckboxLabel = function(checkbox) {
+    const parent = checkbox.closest(".group-bypass-row");
+    const label = parent.querySelector(".bypass-status-label");
+    const slider = parent.querySelector(".slider-toggle");
+    const knob = parent.querySelector(".slider-knob");
+    
+    if (checkbox.checked) {
+        label.textContent = "Cost Bypass Approved";
+        label.style.color = "#34d399";
+        slider.style.backgroundColor = "#34d399";
+        knob.style.left = "22px";
+    } else {
+        label.textContent = "Cost Safety Checked";
+        label.style.color = "var(--text-muted)";
+        slider.style.backgroundColor = "rgba(255,255,255,0.1)";
+        knob.style.left = "3px";
+    }
+};
+
 // ---------------------------------------------------------------------
 // 5. SERIALIZE & SUBMIT DATA
 // ---------------------------------------------------------------------
@@ -1851,6 +1994,17 @@ function serializeConfigForm() {
             masking_rules,
             abac_policies
         };
+    });
+
+    // 5. Serialize Bypass Groups
+    payload.security_policies.high_performance_groups = {
+        HighPerformanceQueryGroup: []
+    };
+    const groupCheckboxes = document.querySelectorAll(".group-bypass-checkbox");
+    groupCheckboxes.forEach(cb => {
+        if (cb.checked) {
+            payload.security_policies.high_performance_groups.HighPerformanceQueryGroup.push(cb.value);
+        }
     });
     
     return payload;

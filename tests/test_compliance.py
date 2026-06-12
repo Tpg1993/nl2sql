@@ -1,5 +1,10 @@
 import os
+import sys
 import unittest
+
+# Add parent directory to path so backend can be imported
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from backend.agent import EHRQueryAgent
 from backend.app import apply_policy_masking, DEMO_USERS
 from backend.auth import get_password_hash, verify_password

@@ -1,6 +1,11 @@
 import os
+import sys
 import unittest
 from sqlalchemy import create_engine
+
+# Add parent directory to path so backend can be imported
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from backend.metadata_rag import MetadataRAG
 
 class TestMetadataRAG(unittest.TestCase):
@@ -8,7 +13,7 @@ class TestMetadataRAG(unittest.TestCase):
     def setUpClass(cls):
         # Establish SQLite connection to existing local ehr_data.db
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        db_path = os.path.join(BASE_DIR, "ehr_data.db")
+        db_path = os.path.abspath(os.path.join(BASE_DIR, "..", "backend", "ehr_data.db"))
         cls.engine = create_engine(f"sqlite:///{db_path}")
         cls.rag = MetadataRAG(cls.engine)
 

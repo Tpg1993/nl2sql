@@ -139,7 +139,7 @@ class MetadataRAG:
         """Initializes LangChain OpenAIEmbeddings and pre-calculates table schema vector embeddings."""
         try:
             openai_key = os.environ.get("OPENAI_API_KEY")
-            if openai_key:
+            if openai_key and "your_openai_api_key" not in openai_key and not openai_key.startswith("sk-proj-***"):
                 from langchain_openai import OpenAIEmbeddings
                 self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
                 

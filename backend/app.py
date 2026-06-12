@@ -761,6 +761,20 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
     """Query the agent with a natural language prompt, returning execution latency and conversational response summary."""
     if not agent:
         raise HTTPException(status_code=500, detail="Database agent is not initialized.")
+        
+    # Under test mode, reload configs on each query to keep in-sync with restored yaml backups
+    if is_testing:
+        try:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            yaml_path = os.path.join(base_dir, "semantic_layer.yaml")
+            from .semantic_layer import SemanticLayer
+            from .metadata_rag import MetadataRAG
+            from .few_shot_library import FewShotLibrary
+            agent.semantic_layer = SemanticLayer(yaml_path)
+            agent.metadata_rag = MetadataRAG(agent.engine, yaml_path)
+            agent.few_shot_library = FewShotLibrary(yaml_path)
+        except Exception as reload_err:
+            print(f"[Testing Hot-Reload] Failed to reload configurations: {reload_err}")
     
     if not query_req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
@@ -784,13 +798,21 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             retrieved_tables = []
             rag_savings_pct = 0.0
             retrieved_few_shots = []
+            scan_breakdown = []
+            optimizer_advisories = []
+            raw_plan = ""
+            estimated_cost = 0.0
             if isinstance(cached_tokens, dict):
                 cached_tokens = cached_tokens.copy()
-                model = cached_tokens.pop("model", "Unknown Model")
-                retries = cached_tokens.pop("retries", 0)
-                retrieved_tables = cached_tokens.pop("retrieved_tables", [])
-                rag_savings_pct = cached_tokens.pop("rag_savings_pct", 0.0)
-                retrieved_few_shots = cached_tokens.pop("retrieved_few_shots", [])
+                model = cached_tokens.pop("model", "Unknown Model") or "Unknown Model"
+                retries = cached_tokens.pop("retries", 0) or 0
+                retrieved_tables = cached_tokens.pop("retrieved_tables", []) or []
+                rag_savings_pct = cached_tokens.pop("rag_savings_pct", 0.0) or 0.0
+                retrieved_few_shots = cached_tokens.pop("retrieved_few_shots", []) or []
+                scan_breakdown = cached_tokens.pop("scan_breakdown", []) or []
+                optimizer_advisories = cached_tokens.pop("optimizer_advisories", []) or []
+                raw_plan = cached_tokens.pop("raw_plan", "") or ""
+                estimated_cost = cached_tokens.pop("estimated_cost", 0.0) or 0.0
             
             # Apply dynamic masking on cached raw results
             raw_results = cached.get("result")
@@ -829,10 +851,13 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
                 "retries": retries,
                 "is_expert_matched": False,
                 "lineage": {},
-                "estimated_cost": 0.0,
+                "estimated_cost": estimated_cost,
                 "retrieved_tables": retrieved_tables,
                 "rag_savings_pct": rag_savings_pct,
                 "retrieved_few_shots": retrieved_few_shots,
+                "scan_breakdown": scan_breakdown,
+                "optimizer_advisories": optimizer_advisories,
+                "raw_plan": raw_plan,
                 "error": None
             }
 
@@ -864,6 +889,10 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             cached_tokens_payload["retrieved_tables"] = res.get("retrieved_tables", [])
             cached_tokens_payload["rag_savings_pct"] = res.get("rag_savings_pct", 0.0)
             cached_tokens_payload["retrieved_few_shots"] = res.get("retrieved_few_shots", [])
+            cached_tokens_payload["scan_breakdown"] = res.get("scan_breakdown", [])
+            cached_tokens_payload["optimizer_advisories"] = res.get("optimizer_advisories", [])
+            cached_tokens_payload["raw_plan"] = res.get("raw_plan", "")
+            cached_tokens_payload["estimated_cost"] = res.get("estimated_cost", 0.0)
             
             cache_manager.set(
                 question=query_req.question,
@@ -907,6 +936,9 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             "retrieved_tables": res.get("retrieved_tables", []),
             "rag_savings_pct": res.get("rag_savings_pct", 0.0),
             "retrieved_few_shots": res.get("retrieved_few_shots", []),
+            "scan_breakdown": res.get("scan_breakdown", []),
+            "optimizer_advisories": res.get("optimizer_advisories", []),
+            "raw_plan": res.get("raw_plan", ""),
             "error": error_message
         }
     except Exception as e:

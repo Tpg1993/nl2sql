@@ -55,3 +55,18 @@ This folder contains the visual execution proof and user interface states for th
 * **Filename**: `11_Vector_Metadata_RAG_Pruning.png`
 * **Functionality**: Matches natural language queries to schemas using dense vector similarity scores. Matched tables are highlighted as purple monospace badges in the "Token & Latency Details" panel.
 * **Unit & E2E Tests**: Verified using automated tests (`test_tfidf_fallback_graceful_run` and `test_13_dynamic_few_shot_and_vector_rag_details_panel`). ✅
+
+## 12. Resource Group Bypass Configurator Tab
+* **Filename**: `12_Bypass_Groups_Configurator_Tab.png`
+* **Functionality**: A configuration interface under the Semantic Configurator where Administrators can assign user roles to the `HighPerformanceQueryGroup`, allowing them to completely bypass query cost limits.
+* **UI Integration & E2E Validation**: Verified via Selenium automated testing (`test_14`). ✅
+
+## 13. Cost-Aware Safety Guardrail (Query Blocked)
+* **Filename**: `13_Cost_Safety_Blocked_Query.png`
+* **Functionality**: When a normal role (e.g. `researcher`) executes a query estimated to scan database rows beyond safe thresholds (e.g. a full scan on a large table), the query planner intercepts it and displays a cost safety error bubble warning.
+* **E2E Tests**: Verified via Selenium automated testing (`test_15`). ✅
+
+## 14. Cost-Aware Safety Guardrail Bypass (Query Succeeded)
+* **Filename**: `14_Cost_Safety_Bypass_Success.png`
+* **Functionality**: When an approved role (e.g. `doctor`, who was added to the `HighPerformanceQueryGroup` by the admin) runs the exact same heavy query, the execution planner bypasses the safety guardrails, executing it and rendering the dynamic results table.
+* **E2E Tests**: Verified via Selenium automated testing (`test_15`). ✅

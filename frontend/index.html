@@ -194,6 +194,7 @@
                     <button class="settings-tab-btn" data-tab="tab-relationships">Relationships</button>
                     <button class="settings-tab-btn" data-tab="tab-metrics">Metrics</button>
                     <button class="settings-tab-btn" data-tab="tab-policies">Policies</button>
+                    <button class="settings-tab-btn" data-tab="tab-groups">Bypass Groups</button>
                     <button class="settings-tab-btn" data-tab="tab-audit-logs">Audit Logs</button>
                 </div>
                 
@@ -241,6 +242,19 @@
                         <h3>Security Policies (RBAC/ABAC)</h3>
                         <div class="policies-container" id="policies-container">
                             <!-- Dynamic Role Policy Editor -->
+                        </div>
+                    </div>
+                    
+                    <!-- Bypass Groups Tab -->
+                    <div class="settings-tab-content" id="tab-groups">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <h3>Resource Group Bypass Management</h3>
+                        </div>
+                        <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 6px;">
+                            <span style="font-weight:600; color: #34d399;"><i class="fa-solid fa-users-gear"></i> HighPerformanceQueryGroup:</span> Approve or remove user roles from this decisive group. Members of this group completely bypass the query cost engine safeguards.
+                        </div>
+                        <div class="groups-list-container" id="groups-list-container" style="display: flex; flex-direction: column; gap: 10px;">
+                            <!-- Dynamic Groups list toggles populated by JS -->
                         </div>
                     </div>
                     

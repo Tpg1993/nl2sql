@@ -1,7 +1,12 @@
 import os
+import sys
 import yaml
 import unittest
 from fastapi.testclient import TestClient
+
+# Add parent directory to path so backend can be imported
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from backend.app import app, DEMO_USERS
 from backend.auth import create_access_token
 
@@ -21,8 +26,9 @@ class TestConfigEditorAPI(unittest.TestCase):
         
         # Backup the current semantic_layer.yaml to restore after tests
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        cls.yaml_path = os.path.join(base_dir, "semantic_layer.yaml")
-        cls.backup_path = os.path.join(base_dir, "semantic_layer.yaml.backup")
+        backend_dir = os.path.abspath(os.path.join(base_dir, "..", "backend"))
+        cls.yaml_path = os.path.join(backend_dir, "semantic_layer.yaml")
+        cls.backup_path = os.path.join(backend_dir, "semantic_layer.yaml.backup")
         if os.path.exists(cls.yaml_path):
             with open(cls.yaml_path, "r", encoding="utf-8") as f:
                 cls.original_content = f.read()
