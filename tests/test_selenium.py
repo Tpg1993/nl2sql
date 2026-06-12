@@ -1197,5 +1197,66 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
+    def test_17_federated_query_router(self):
+        self.log("[Test 17] Testing Federated Query Virtualization Engine...")
+        driver = self.driver
+        self.login("admin", ADMIN_PASSWORD)
+        
+        # Wait for connected
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # Submit federated query
+        input_box = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "user-input"))
+        )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
+        
+        federated_query = (
+            "SELECT p.full_name, d.department_name, e.total_charges "
+            "FROM patients p "
+            "JOIN encounters e ON p.patient_id = e.patient_id "
+            "JOIN departments d ON e.department_id = d.department_id "
+            "ORDER BY e.total_charges DESC LIMIT 5"
+        )
+        self.driver.execute_script(f"arguments[0].value = {repr(federated_query)}; arguments[0].dispatchEvent(new Event('input'));", input_box)
+        time.sleep(0.5)
+        
+        send_btn = driver.find_element(By.ID, "send-button")
+        self.driver.execute_script("arguments[0].click();", send_btn)
+        
+        # Wait for result (FastAPI / query decomposition / in-memory join)
+        time.sleep(10)
+        
+        # Verify table is rendered
+        result_table = WebDriverWait(driver, 45).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+        )
+        self.assertTrue(result_table.is_displayed())
+        
+        # Verify that uvicorn logs contain the federated engine logs
+        results_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "results"))
+        uvicorn_log_path = os.path.join(results_dir, "uvicorn.log")
+        
+        # Flush backend uvicorn.log buffer if any, or wait for file write
+        time.sleep(2)
+        
+        with open(uvicorn_log_path, "r", encoding="utf-8") as f:
+            logs = f.read()
+            
+        self.assertIn("-> Running Federated Join across local SQLite and remote Databricks...", logs)
+        self.log("-> SUCCESS: Verified federated query engine execution in uvicorn console logs.")
+        
+        # Verify result contains actual joined departments and patients
+        table_text = result_table.text
+        self.assertIn("Saanvi Das", table_text)
+        self.assertIn("Diabetology", table_text)
+        self.log("-> SUCCESS: Verified table outputs containing unified clinical / department mappings.")
+        
+        self._test_has_failed = False
+        self.logout()
+
 if __name__ == "__main__":
     unittest.main()

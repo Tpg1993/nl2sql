@@ -22,6 +22,30 @@ try:
 except ImportError:
     pass
 
+TABLE_LOCATIONS = {
+    "patients": "local",
+    "vitals": "local",
+    "allergies": "local",
+    "diagnoses": "local",
+    "medications": "local",
+    "departments": "remote",
+    "providers": "remote",
+    "encounters": "remote",
+    "lab_orders": "remote",
+    "lab_results": "remote"
+}
+
+def get_expr_key(expr):
+    if expr.alias:
+        return expr.alias.lower()
+    if isinstance(expr, exp.Column):
+        return expr.name.lower()
+    col = expr.find(exp.Column)
+    if col:
+        return col.name.lower()
+    return expr.sql().lower()
+
+
 class AgentState(MessagesState):
     """Custom LangGraph state incorporating message history, retry count, and section latencies."""
     retries: int
@@ -229,7 +253,10 @@ class EHRQueryAgent:
                 sql_query = "SELECT COUNT(*) FROM patients"
                 summary = "There are 1000 patients in total."
                 
-                if "provider" in user_q_lower:
+                if "select" in user_q_lower:
+                    sql_query = user_q
+                    summary = "Here is the federated query result."
+                elif "provider" in user_q_lower:
                     sql_query = "SELECT d.department_name, COUNT(p.provider_id) AS provider_count FROM providers p JOIN departments d ON p.department_id = d.department_id GROUP BY d.department_name ORDER BY provider_count DESC LIMIT 5;"
                     summary = "The top 5 departments by provider count are Emergency (9 providers), Neurology (8 providers), Nephrology (7 providers), Pulmonology (7 providers), and General Medicine (7 providers)."
                 elif "allerg" in user_q_lower:
@@ -639,36 +666,284 @@ class EHRQueryAgent:
 
     def is_federated_query(self, sql_query: str) -> bool:
         """Determines if a query requires federated join between local SQLite and remote Databricks SQL."""
-        has_databricks = os.environ.get("DATABRICKS_HOST") is not None
-        query_upper = sql_query.upper()
-        return has_databricks and "PATIENTS" in query_upper and "DEPARTMENTS" in query_upper
+        if not sql_query or not sql_query.strip():
+            return False
+        try:
+            parsed = sqlglot.parse_one(sql_query)
+            tables = [t.name.lower() for t in parsed.find_all(exp.Table)]
+            has_local = False
+            has_remote = False
+            for t in tables:
+                loc = TABLE_LOCATIONS.get(t)
+                if loc == "local":
+                    has_local = True
+                elif loc == "remote":
+                    has_remote = True
+            return has_local and has_remote
+        except Exception:
+            # Fallback simple search
+            query_lower = sql_query.lower()
+            local_tables = ["patients", "vitals", "allergies", "diagnoses", "medications"]
+            remote_tables = ["departments", "providers", "encounters", "lab_orders", "lab_results"]
+            has_local = any(t in query_lower for t in local_tables)
+            has_remote = any(t in query_lower for t in remote_tables)
+            return has_local and has_remote
+
+    def decompose_query(self, sql: str):
+        parsed = sqlglot.parse_one(sql)
+        
+        # 1. Map aliases to table names
+        table_aliases = {}
+        for table in parsed.find_all(exp.Table):
+            alias = table.alias
+            table_name = table.name.lower()
+            table_aliases[alias or table_name] = table_name
+
+        # 2. Track local vs remote aliases
+        local_aliases = set()
+        remote_aliases = set()
+        for alias, tbl in table_aliases.items():
+            if TABLE_LOCATIONS.get(tbl, "local") == "local":
+                local_aliases.add(alias)
+            else:
+                remote_aliases.add(alias)
+
+        # 3. Find cross-boundary join conditions
+        local_join_keys = {}
+        remote_join_keys = {}
+        join_conditions = []
+        
+        for join in parsed.find_all(exp.Join):
+            on_expr = join.args.get("on")
+            if on_expr:
+                for eq in on_expr.find_all(exp.EQ):
+                    left = eq.left
+                    right = eq.right
+                    if isinstance(left, exp.Column) and isinstance(right, exp.Column):
+                        left_alias = left.table or left.name
+                        right_alias = right.table or right.name
+                        left_tbl = table_aliases.get(left_alias, left_alias)
+                        right_tbl = table_aliases.get(right_alias, right_alias)
+                        
+                        left_loc = TABLE_LOCATIONS.get(left_tbl, "local")
+                        right_loc = TABLE_LOCATIONS.get(right_tbl, "local")
+                        
+                        if left_loc != right_loc:
+                            if left_loc == "local":
+                                local_join_keys.setdefault(left_alias, set()).add(left.name.lower())
+                                remote_join_keys.setdefault(right_alias, set()).add(right.name.lower())
+                                join_conditions.append((left_alias, left.name.lower(), right_alias, right.name.lower()))
+                            else:
+                                remote_join_keys.setdefault(left_alias, set()).add(left.name.lower())
+                                local_join_keys.setdefault(right_alias, set()).add(right.name.lower())
+                                join_conditions.append((right_alias, right.name.lower(), left_alias, left.name.lower()))
+                                
+        # 4. Group select expressions by location
+        local_selects = []
+        remote_selects = []
+        LOCAL_COLUMNS = {
+            "patient_id", "mrn", "full_name", "gender", "dob", "phone", "email", "city", "state", "blood_group", "marital_status",
+            "vital_id", "measurement_date", "systolic", "diastolic", "pulse", "temperature", "respiratory_rate",
+            "allergy_id", "allergy_name", "reaction", "severity", "is_active",
+            "diagnosis_id", "diagnosis_code", "diagnosis_name", "diagnosed_date",
+            "medication_id", "medication_name", "dosage", "frequency", "start_date", "end_date"
+        }
+        for expr in parsed.expressions:
+            referenced_aliases = {c.table for c in expr.find_all(exp.Column) if c.table}
+            is_local = any(a in local_aliases for a in referenced_aliases)
+            is_remote = any(a in remote_aliases for a in referenced_aliases)
+            
+            if not referenced_aliases:
+                cols = [c.name.lower() for c in expr.find_all(exp.Column)]
+                for col in cols:
+                    if col in LOCAL_COLUMNS:
+                        is_local = True
+                    else:
+                        is_remote = True
+            
+            if is_local:
+                local_selects.append(expr)
+            if is_remote:
+                remote_selects.append(expr)
+                
+        # 5. Add join keys to selects
+        for alias, keys in local_join_keys.items():
+            for key in keys:
+                col_expr = exp.Column(this=exp.to_identifier(key), table=exp.to_identifier(alias))
+                if not any(s.sql().lower() == col_expr.sql().lower() or (s.alias.lower() == key if s.alias else False) for s in local_selects):
+                    local_selects.append(col_expr)
+                    
+        for alias, keys in remote_join_keys.items():
+            for key in keys:
+                col_expr = exp.Column(this=exp.to_identifier(key), table=exp.to_identifier(alias))
+                if not any(s.sql().lower() == col_expr.sql().lower() or (s.alias.lower() == key if s.alias else False) for s in remote_selects):
+                    remote_selects.append(col_expr)
+
+        # Helper to build sub-query
+        def build_side_query(side_selects, side_aliases):
+            # Find the FROM table
+            from_node = parsed.args.get("from")
+            main_table_node = None
+            if from_node:
+                main_table_node = from_node.this
+                main_alias = main_table_node.alias or main_table_node.name.lower()
+                if main_alias not in side_aliases:
+                    main_table_node = None
+            
+            # If main table is not on this side, find the first join table on this side
+            if not main_table_node:
+                for join in parsed.find_all(exp.Join):
+                    join_table = join.this
+                    j_alias = join_table.alias or join_table.name.lower()
+                    if j_alias in side_aliases:
+                        main_table_node = join_table
+                        break
+            
+            if not main_table_node:
+                # Fallback if no table found on this side
+                return ""
+            
+            alias_str = f" AS {main_table_node.alias}" if main_table_node.alias else ""
+            query_str = "SELECT " + ", ".join(s.sql() for s in side_selects)
+            query_str += f" FROM {main_table_node.name}{alias_str}"
+            
+            # Add joins
+            for join in parsed.find_all(exp.Join):
+                join_table = join.this
+                j_alias = join_table.alias or join_table.name.lower()
+                if j_alias in side_aliases and join_table != main_table_node:
+                    query_str += f" {join.sql()}"
+            
+            # Add side filters
+            where_node = parsed.args.get("where")
+            side_filters = []
+            if where_node:
+                def get_cond_loc(cond):
+                    cols = list(cond.find_all(exp.Column))
+                    aliases = {c.table for c in cols if c.table}
+                    is_s = any(a in side_aliases for a in aliases)
+                    is_oth = any(a not in side_aliases for a in aliases)
+                    if is_s and not is_oth:
+                        return "side"
+                    if is_oth and not is_s:
+                        return "other"
+                    return "both"
+
+                def traverse_and(node):
+                    if isinstance(node, exp.And):
+                        return traverse_and(node.left) + traverse_and(node.right)
+                    return [node]
+
+                flat_conds = traverse_and(where_node.this)
+                for cond in flat_conds:
+                    if get_cond_loc(cond) == "side":
+                        side_filters.append(cond)
+            
+            if side_filters:
+                query_str += " WHERE " + " AND ".join(c.sql() for c in side_filters)
+                
+            return query_str
+
+        local_query = build_side_query(local_selects, local_aliases)
+        remote_query = build_side_query(remote_selects, remote_aliases)
+        
+        return local_query, remote_query, join_conditions, parsed
 
     def execute_federated_query(self, sql_query: str) -> str:
         """Executes federated query by querying SQLite and Databricks separately, and joining outcomes in-memory."""
         print("-> Running Federated Join across local SQLite and remote Databricks...")
         try:
+            local_q, remote_q, joins, parsed = self.decompose_query(sql_query)
+            print(f"Local query decomposed: {local_q}")
+            print(f"Remote query decomposed: {remote_q}")
+            
+            # Execute local query on SQLite
             import sqlite3
             BASE_DIR = os.path.dirname(os.path.abspath(__file__))
             sqlite_db = os.path.join(BASE_DIR, "ehr_data.db")
-            sqlite_conn = sqlite3.connect(sqlite_db)
-            sqlite_cursor = sqlite_conn.cursor()
             
-            # Fetch patients (limit to 10 for safety)
-            sqlite_cursor.execute("SELECT patient_id, full_name, gender, dob FROM patients LIMIT 10")
-            patients = sqlite_cursor.fetchall()
+            # Open SQLite connection (read-only for security)
+            sqlite_conn = sqlite3.connect(f"file:{sqlite_db}?mode=ro", uri=True)
+            sqlite_conn.row_factory = lambda cursor, row: {col[0].lower(): row[idx] for idx, col in enumerate(cursor.description)}
+            
+            local_cursor = sqlite_conn.execute(local_q)
+            local_rows = local_cursor.fetchall()
             sqlite_conn.close()
             
-            # Fetch departments from remote Databricks SQL engine
+            # Execute remote query on the remote engine (Databricks or fallback SQLite engine)
+            remote_rows = []
+            from sqlalchemy import text
             with self.engine.connect() as db_conn:
-                db_result = db_conn.execute("SELECT department_id, department_name, location FROM departments LIMIT 5").fetchall()
+                res = db_conn.execute(text(remote_q))
+                keys = [k.lower() for k in res.keys()]
+                for row in res:
+                    remote_rows.append({k: v for k, v in zip(keys, row)})
+                    
+            # Perform client-side hash join
+            if not joins:
+                raise ValueError("No cross-boundary join conditions found in the query.")
+                
+            local_alias, local_key, remote_alias, remote_key = joins[0]
             
-            # Simulate polystore client-side join merge
-            unified_rows = []
-            for pat in patients:
-                dept = db_result[pat[0] % len(db_result)] if db_result else (1, "Default Dept", "Local")
-                unified_rows.append((pat[1], pat[2], pat[3], dept[1], dept[2]))
+            local_lookup = {}
+            for row in local_rows:
+                key_val = row.get(local_key)
+                if key_val is not None:
+                    local_lookup.setdefault(key_val, []).append(row)
+                    
+            unified = []
+            for r_row in remote_rows:
+                r_key_val = r_row.get(remote_key)
+                if r_key_val in local_lookup:
+                    for l_row in local_lookup[r_key_val]:
+                        merged = {}
+                        for expr in parsed.expressions:
+                            key = get_expr_key(expr)
+                            if key in l_row:
+                                merged[key] = l_row[key]
+                            elif key in r_row:
+                                merged[key] = r_row[key]
+                        row_tuple = tuple(merged.get(get_expr_key(expr)) for expr in parsed.expressions)
+                        unified.append(row_tuple)
+                        
+            # Apply ORDER BY sorting if present
+            order_node = parsed.args.get("order")
+            if order_node and order_node.expressions:
+                first_expr = order_node.expressions[0]
+                col_name = first_expr.this.name.lower() if hasattr(first_expr.this, "name") else str(first_expr.this).lower()
+                desc = first_expr.args.get("desc", False)
+                
+                # Find index of this column in selects
+                sort_col_idx = -1
+                for idx, select_expr in enumerate(parsed.expressions):
+                    if get_expr_key(select_expr) == col_name:
+                        sort_col_idx = idx
+                        break
+                        
+                if sort_col_idx != -1:
+                    def get_sort_val(x):
+                        val = x[sort_col_idx]
+                        if val is None:
+                            return "" if isinstance(val, str) else 0
+                        return val
+                    unified.sort(key=get_sort_val, reverse=desc)
+                    
+            # Apply LIMIT and OFFSET if present
+            limit_node = parsed.args.get("limit")
+            offset_node = parsed.args.get("offset")
             
-            return str(unified_rows)
+            offset_val = 0
+            if offset_node:
+                offset_val = int(offset_node.expression.this)
+                
+            if limit_node:
+                limit_val = int(limit_node.expression.this)
+                unified = unified[offset_val : offset_val + limit_val]
+            elif offset_val > 0:
+                unified = unified[offset_val:]
+                
+            return str(unified)
+            
         except Exception as e:
             print(f"Federated query failed: {e}")
             raise e
