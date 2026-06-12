@@ -2258,4 +2258,6 @@ async function loadGitInfo() {
     }
 }
 
+window.__app_initialized = true;
+
 

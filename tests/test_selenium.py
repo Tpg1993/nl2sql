@@ -191,7 +191,11 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
     def setUp(self):
         self._test_has_failed = True
         # Fresh page load before each test case
+        self.driver.get("about:blank")
         self.driver.get("http://localhost:3000")
+        WebDriverWait(self.driver, 15).until(
+            lambda d: d.execute_script("return window.__app_initialized === true;")
+        )
         time.sleep(1)
 
     def tearDown(self):
@@ -233,10 +237,12 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
 
     def login(self, username, password):
         """Helper to input credentials and submit authentication."""
+        self.log(f"-> Starting login helper for username={username}...")
         driver = self.driver
-        WebDriverWait(driver, 5).until(
+        WebDriverWait(driver, 15).until(
             EC.visibility_of_element_located((By.ID, "login-overlay"))
         )
+        self.log("-> login-overlay is visible.")
         
         username_input = driver.find_element(By.ID, "login-username")
         password_input = driver.find_element(By.ID, "login-password")
@@ -244,22 +250,28 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         
         username_input.clear()
         username_input.send_keys(username)
+        self.log("-> Typed username.")
+        
         password_input.clear()
         password_input.send_keys(password)
+        self.log("-> Typed password.")
         
         submit_btn.click()
+        self.log("-> Clicked submit button.")
         
         # Wait for modal overlay to fade out
-        WebDriverWait(driver, 5).until(
+        WebDriverWait(driver, 15).until(
             EC.invisibility_of_element_located((By.ID, "login-overlay"))
         )
+        self.log("-> login-overlay is now invisible. Login complete.")
 
     def logout(self):
         """Helper to clear local storage and session."""
         self.driver.execute_script("localStorage.removeItem('access_token');")
+        self.driver.get("about:blank")
         self.driver.get("http://localhost:3000")
         WebDriverWait(self.driver, 15).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
+            lambda d: d.execute_script("return window.__app_initialized === true;")
         )
         WebDriverWait(self.driver, 15).until(
             EC.visibility_of_element_located((By.ID, "login-overlay"))
