@@ -1,5 +1,31 @@
 const API_BASE = "http://127.0.0.1:8000/api";
 
+// Session Thread ID Helpers
+function getOrCreateThreadId() {
+    let threadId = localStorage.getItem("thread_id");
+    if (!threadId) {
+        threadId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'thread_' + Math.random().toString(36).substring(2, 11);
+        localStorage.setItem("thread_id", threadId);
+    }
+    return threadId;
+}
+
+function resetChatSession() {
+    const newThreadId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'thread_' + Math.random().toString(36).substring(2, 11);
+    localStorage.setItem("thread_id", newThreadId);
+
+    const messages = Array.from(chatMessages.children);
+    messages.forEach(child => {
+        if (child !== welcomeView) {
+            child.remove();
+        }
+    });
+
+    if (welcomeView) {
+        welcomeView.style.display = "";
+    }
+}
+
 // DOM Elements
 const statusBadge = document.getElementById("status-badge");
 const statusText = document.getElementById("status-text");
@@ -17,6 +43,12 @@ const sendButton = document.getElementById("send-button");
 window.addEventListener("DOMContentLoaded", () => {
     initSidebarCollapse();
     initLogout();
+    getOrCreateThreadId();
+
+    const newChatBtn = document.getElementById("new-chat-btn");
+    if (newChatBtn) {
+        newChatBtn.addEventListener("click", resetChatSession);
+    }
 
     const xSelect = document.getElementById("chart-x-select");
     const ySelect = document.getElementById("chart-y-select");
@@ -273,7 +305,7 @@ async function submitQuestion(question) {
         const response = await fetch(`${API_BASE}/query`, {
             method: "POST",
             headers: headers,
-            body: JSON.stringify({ question })
+            body: JSON.stringify({ question, thread_id: getOrCreateThreadId() })
         });
         
         removeTypingIndicator(loaderId);

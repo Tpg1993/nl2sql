@@ -327,11 +327,18 @@ class EHRQueryAgent:
                 
         return MockEHRLLM()
 
+    def _get_latest_user_question(self, state: AgentState) -> str:
+        """Finds the latest human query from the graph messages state history."""
+        for msg in reversed(state.get("messages", [])):
+            if isinstance(msg, HumanMessage):
+                return msg.content
+        return ""
+
     def retrieve_schema_node(self, state: AgentState) -> Dict[str, Any]:
         """Node 1 & 2 (Combined): Retrieve relevant tables using Metadata RAG and fetch their schema specifications."""
         print("\n[Node RAG] Performing semantic metadata retrieval...")
         start_time = time.perf_counter()
-        user_question = state["messages"][0].content
+        user_question = self._get_latest_user_question(state)
         
         # Call Metadata RAG to get relevant tables
         retrieved_tables = self.metadata_rag.retrieve_tables(user_question, top_k=3)
@@ -363,7 +370,7 @@ class EHRQueryAgent:
         """Node 3: Generate SQL query based on user question, DB schema, and semantic layer, taking error details on retry."""
         print("\n[Node 3] Building execution query context...")
         start_time = time.perf_counter()
-        user_question = state["messages"][0].content
+        user_question = self._get_latest_user_question(state)
         
         # 1. Pre-execution expert override check (RLHF)
         user_context = state.get("user_context") or {}
@@ -409,12 +416,59 @@ class EHRQueryAgent:
                 few_shot_context += f"Question: {ex.get('question')}\n"
                 few_shot_context += f"SQL: {ex.get('sql')}\n\n"
 
+        # Compile sliding context window chat history (stripping raw DB results)
+        turns = []
+        current_turn = {}
+        messages = state.get("messages", [])
+        
+        # Locate the index of the latest HumanMessage (which is the current user question)
+        latest_human_idx = -1
+        for idx in range(len(messages) - 1, -1, -1):
+            if isinstance(messages[idx], HumanMessage):
+                latest_human_idx = idx
+                break
+        
+        # Only parse history prior to this latest human question
+        history_messages = messages[:latest_human_idx] if latest_human_idx >= 0 else []
+        
+        for msg in history_messages:
+            if isinstance(msg, HumanMessage):
+                if current_turn:
+                    turns.append(current_turn)
+                current_turn = {"question": msg.content, "sql": "", "summary": ""}
+            elif isinstance(msg, AIMessage):
+                content = msg.content
+                if "SELECT" in content.upper():
+                    current_turn["sql"] = content
+                elif not content.startswith("Error executing query:") and "CREATE TABLE" not in content:
+                    current_turn["summary"] = content
+                    
+        if current_turn:
+            turns.append(current_turn)
+            
+        # Keep only the last 3 turns
+        turns = turns[-3:]
+        
+        chat_history_str = ""
+        for idx, turn in enumerate(turns):
+            chat_history_str += f"--- Turn {idx + 1} ---\n"
+            chat_history_str += f"User: {turn.get('question', '')}\n"
+            if turn.get("sql"):
+                chat_history_str += f"Assistant SQL: {turn.get('sql', '')}\n"
+            if turn.get("summary"):
+                summary = turn.get("summary", "")
+                if len(summary) > 200:
+                    summary = summary[:200] + "..."
+                chat_history_str += f"Assistant Summary: {summary}\n"
+            chat_history_str += "\n"
+
         prompt = self.prompt_library.format_sql_generation(
             user_question=user_question,
             semantic_context=self.semantic_layer.get_context_prompt(),
             db_schema=db_schema,
             previous_error=previous_error,
-            few_shot_context=few_shot_context
+            few_shot_context=few_shot_context,
+            chat_history=chat_history_str
         )
         
         result = self.llm.invoke(prompt)
@@ -642,7 +696,7 @@ class EHRQueryAgent:
         """Node 5: Generates a natural language clinical summary of database results."""
         print("\n[Node 5] Generating conversational results summary...")
         start_time = time.perf_counter()
-        user_question = state["messages"][0].content
+        user_question = self._get_latest_user_question(state)
         
         # Traverse history to identify query outputs and query string
         db_result = ""
@@ -1117,9 +1171,10 @@ class EHRQueryAgent:
         )
         builder.add_edge("summarize_results", END)
         
-        return builder.compile()
+        from langgraph.checkpoint.memory import MemorySaver
+        return builder.compile(checkpointer=MemorySaver())
 
-    def query(self, question: str, user_context: dict = None) -> str:
+    def query(self, question: str, user_context: dict = None, thread_id: str = None) -> str:
         """Runs the compiled graph workflow for a natural language question, sanitizing input PII."""
         gray_question, pii_params = self.sanitize_and_extract_pii(question)
         initial_state = {
@@ -1137,10 +1192,11 @@ class EHRQueryAgent:
             "user_context": user_context,
             "retrieved_few_shots": []
         }
-        output = self.agent.invoke(initial_state)
+        config = {"configurable": {"thread_id": thread_id}} if thread_id else None
+        output = self.agent.invoke(initial_state, config=config)
         return output["messages"][-1].content
 
-    def query_detailed(self, question: str, user_context: dict = None) -> dict:
+    def query_detailed(self, question: str, user_context: dict = None, thread_id: str = None) -> dict:
         """Runs the compiled graph workflow and returns generated SQL, DB results, conversational summary, and LLM token usage."""
         sanitized_question, pii_params = self.sanitize_and_extract_pii(question)
         initial_state = {
@@ -1158,7 +1214,8 @@ class EHRQueryAgent:
             "user_context": user_context,
             "retrieved_few_shots": []
         }
-        output = self.agent.invoke(initial_state)
+        config = {"configurable": {"thread_id": thread_id}} if thread_id else None
+        output = self.agent.invoke(initial_state, config=config)
 
         
         sql_query = ""

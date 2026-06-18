@@ -40,10 +40,11 @@ class PromptLibrary:
         if filename == "sql_generation.txt":
             return (
                 "You are an SQL database query expert. Generate the correct query matching the schema and semantic layer rules below.\n\n"
-                "User Query Request: {user_question}\n\n"
                 "Database Semantic Layer Context (Business logic definitions, calculations, and join keys):\n{semantic_context}\n\n"
                 "Database Schema Context (Raw table schema details):\n{db_schema}\n\n"
                 "{few_shot_context}"
+                "Recent Conversation History:\n{chat_history}\n\n"
+                "User Query Request (Follow-up or Standalone): {user_question}\n\n"
                 "Rules:\n"
                 "- Use ONLY safe SELECT operations. Do not update, alter, append, or drop tables.\n"
                 "- Return ONLY the clean, raw SQL string payload. Do not wrap it in markdown framing like ```sql.\n"
@@ -73,14 +74,15 @@ class PromptLibrary:
             )
         return ""
 
-    def format_sql_generation(self, user_question: str, semantic_context: str, db_schema: str, previous_error: str = None, few_shot_context: str = "") -> str:
+    def format_sql_generation(self, user_question: str, semantic_context: str, db_schema: str, previous_error: str = None, few_shot_context: str = "", chat_history: str = "") -> str:
         """Formats the SQL generation prompt template with parameters, injecting retry context if present."""
         base_template = self.templates.get("sql_generation.txt", "")
         prompt = base_template.format(
             user_question=user_question,
             semantic_context=semantic_context,
             db_schema=db_schema,
-            few_shot_context=few_shot_context
+            few_shot_context=few_shot_context,
+            chat_history=chat_history
         )
         
         if previous_error:

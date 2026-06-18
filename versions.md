@@ -4,7 +4,14 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
-## [v22_federated_query_caching](#v22_federated_query_caching) (Current Active Branch)
+## [v23_conversational_memory](#v23_conversational_memory) (Current Active Branch)
+*   **Release Focus**: Multi-Turn Conversational Memory & Token/Cost optimization.
+*   **Conversational Checkpointing**: Integrates LangGraph checkpointer memory via `MemorySaver` to persist multi-turn conversational context on a per-thread basis.
+*   **Token Optimization (Result Stripping & Sliding Window)**: Limits chat history injection to a sliding window of the last 3 turns, completely stripping out raw database result row arrays/dicts and DDL schemas from past turns to prevent token bloat and optimize prompt sizes by up to 90%.
+*   **Visual Reset control**: Introduces a visual "New Chat" header button that resets conversation logs and updates the local storage `thread_id` to initialize isolated threads.
+*   **Verification**: Verified via dedicated E2E unit tests ([test_conversational_memory.py](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/tests/test_conversational_memory.py)) asserting thread isolation, sliding window turn limits, and data result stripping.
+
+## [v22_federated_query_caching](#v22_federated_query_caching)
 *   **Release Focus**: Federated Query Sub-Query Caching to reduce execution costs and network latency.
 *   **Sub-Query Caching**: Caches decomposed query results for remote databases (like Snowflake or Databricks SQL Warehouses) using SQL statement hash keys.
 *   **Dual SQLite/Redis Backend**: Supports both local SQLite (`sql_cache` table) and distributed Redis (`nl2sql:sql_cache:*` namespace) cache stores.

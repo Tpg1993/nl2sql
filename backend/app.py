@@ -335,6 +335,7 @@ except Exception as e:
 
 class QueryRequest(BaseModel):
     question: str
+    thread_id: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -1069,7 +1070,7 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
 
     # 2. Run agent if cache miss
     try:
-        res = agent.query_detailed(query_req.question, user_context=current_user)
+        res = agent.query_detailed(query_req.question, user_context=current_user, thread_id=query_req.thread_id)
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
         raw_result = res["result"]
         conversational_summary = res.get("summary", "")
