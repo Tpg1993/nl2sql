@@ -2421,9 +2421,19 @@ function openChartModal(data, encodedQuestion, headers = []) {
         xOpt.textContent = colLabel;
         xSelect.appendChild(xOpt);
         
-        // Populate Y-Axis options (only numeric/parseable keys)
-        let isNum = false;
+        // Populate Y-Axis options with all data columns to ensure the user has option to swap/change axes
+        const yOpt = document.createElement("option");
+        yOpt.value = k;
+        yOpt.textContent = colLabel;
+        ySelect.appendChild(yOpt);
+    });
+    
+    // Find first numeric key for default selection
+    let defaultY = "";
+    for (let i = 0; i < keys.length; i++) {
+        const k = keys[i];
         const testVal = firstRow[k];
+        let isNum = false;
         if (typeof testVal === 'number' && !isNaN(testVal)) {
             isNum = true;
         } else if (typeof testVal === 'string') {
@@ -2432,29 +2442,41 @@ function openChartModal(data, encodedQuestion, headers = []) {
                 isNum = true;
             }
         }
-        
         if (isNum) {
-            const yOpt = document.createElement("option");
-            yOpt.value = k;
-            yOpt.textContent = colLabel;
-            ySelect.appendChild(yOpt);
+            defaultY = k;
+            break;
         }
-    });
+    }
+    if (!defaultY && keys.length > 0) {
+        defaultY = keys[0];
+    }
+    if (defaultY) {
+        ySelect.value = defaultY;
+    }
     
-    // Auto-select a numeric field for Y-Axis and a non-numeric for X-Axis if possible
+    // Auto-select a non-numeric field for X-Axis if possible
     if (xSelect.options.length > 1 && ySelect.options.length > 0) {
         let selectedX = false;
-        // Find first key that is NOT numeric to be X-Axis
+        // Find first key that is NOT numeric to be X-Axis and doesn't conflict with defaultY
         for (let i = 0; i < keys.length; i++) {
             const k = keys[i];
-            const isYKey = Array.from(ySelect.options).some(opt => opt.value === k);
-            if (!isYKey) {
+            const testVal = firstRow[k];
+            let isNum = false;
+            if (typeof testVal === 'number' && !isNaN(testVal)) {
+                isNum = true;
+            } else if (typeof testVal === 'string') {
+                const num = parseFloat(testVal);
+                if (!isNaN(num) && isFinite(num) && /^-?\d+(\.\d+)?$/.test(testVal.trim())) {
+                    isNum = true;
+                }
+            }
+            if (!isNum && k !== defaultY) {
                 xSelect.value = k;
                 selectedX = true;
                 break;
             }
         }
-        // If all columns are numeric, default to Row Index for X-Axis
+        // If all columns are numeric or no non-numeric column is found, default to Row Index for X-Axis
         if (!selectedX) {
             xSelect.value = "__row_index__";
         }
@@ -2501,8 +2523,21 @@ document.addEventListener("DOMContentLoaded", () => {
 function renderQueryChart() {
     if (!currentChartData) return;
     
-    const canvas = document.getElementById("query-chart-canvas");
+    let canvas = document.getElementById("query-chart-canvas");
     if (!canvas) return;
+    
+    // Destroy existing instance to prevent overlapping rendering bugs
+    if (currentChartInstance) {
+        currentChartInstance.destroy();
+        currentChartInstance = null;
+    }
+    
+    // Recreate the canvas element to completely reset context and prevent double rendering / ghosting bugs
+    const container = canvas.parentNode;
+    const newCanvas = document.createElement("canvas");
+    newCanvas.id = "query-chart-canvas";
+    container.replaceChild(newCanvas, canvas);
+    canvas = newCanvas;
     
     const xSelect = document.getElementById("chart-x-select");
     const ySelect = document.getElementById("chart-y-select");
@@ -2527,11 +2562,6 @@ function renderQueryChart() {
     
     const xLabelText = xSelect.options[xSelect.selectedIndex] ? xSelect.options[xSelect.selectedIndex].text : xKey;
     const yLabelText = ySelect.options[ySelect.selectedIndex] ? ySelect.options[ySelect.selectedIndex].text : yKey;
-    
-    // Destroy existing instance to prevent overlapping rendering bugs
-    if (currentChartInstance) {
-        currentChartInstance.destroy();
-    }
     
     // Limit data to prevent clutter (max 25 rows)
     const displayData = currentChartData.slice(0, 25);
