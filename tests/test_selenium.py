@@ -361,6 +361,13 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
             EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
         )
         
+        # Switch to Schema tab first to make it visible and interactive
+        schema_tab_btn = WebDriverWait(self.driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "tab-btn-schema"))
+        )
+        schema_tab_btn.click()
+        time.sleep(0.5)
+
         # Check if tables are loaded in sidebar
         table_container = self.driver.find_element(By.ID, "table-list-container")
         table_items = table_container.find_elements(By.CLASS_NAME, "table-item")
@@ -450,7 +457,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         
         # Check table result is present
         result_table = WebDriverWait(self.driver, 45).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+            EC.visibility_of_element_located((By.CLASS_NAME, "result-table"))
         )
         self.assertTrue(result_table.is_displayed())
         
@@ -615,7 +622,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         
         # Inspect table rows for masked lock icons
         result_table = WebDriverWait(self.driver, 45).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+            EC.visibility_of_element_located((By.CLASS_NAME, "result-table"))
         )
         
         # Check for lock icons or masked characters
@@ -876,7 +883,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         
         # Verify table result is present
         result_table = WebDriverWait(driver, 45).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+            EC.visibility_of_element_located((By.CLASS_NAME, "result-table"))
         )
         self.assertTrue(result_table.is_displayed())
         self.log("-> Query successfully executed.")
@@ -963,7 +970,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         
         # Verify result table is shown
         result_table = WebDriverWait(driver, 45).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+            EC.visibility_of_element_located((By.CLASS_NAME, "result-table"))
         )
         self.assertTrue(result_table.is_displayed())
         
@@ -1163,7 +1170,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         time.sleep(10)
         
         result_table = WebDriverWait(driver, 45).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+            EC.visibility_of_element_located((By.CLASS_NAME, "result-table"))
         )
         self.assertTrue(result_table.is_displayed())
         self.log("-> SUCCESS: Doctor bypassed cost safety check and successfully executed heavy query.")
@@ -1271,7 +1278,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         
         # Verify table is rendered
         result_table = WebDriverWait(driver, 45).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+            EC.visibility_of_element_located((By.CLASS_NAME, "result-table"))
         )
         self.assertTrue(result_table.is_displayed())
         
@@ -1347,7 +1354,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         
         # Verify result table is rendered
         result_table = WebDriverWait(driver, 45).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+            EC.visibility_of_element_located((By.CLASS_NAME, "result-table"))
         )
         self.assertTrue(result_table.is_displayed())
         
