@@ -198,11 +198,6 @@ window.addEventListener("DOMContentLoaded", () => {
     getOrCreateThreadId();
     loadChatSessions();
 
-    const newChatBtn = document.getElementById("new-chat-btn");
-    if (newChatBtn) {
-        newChatBtn.addEventListener("click", resetChatSession);
-    }
-
     const sidebarNewChatBtn = document.getElementById("sidebar-new-chat-btn");
     if (sidebarNewChatBtn) {
         sidebarNewChatBtn.addEventListener("click", resetChatSession);
