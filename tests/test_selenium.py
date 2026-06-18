@@ -1248,12 +1248,18 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         # Verify that uvicorn logs contain the federated engine logs
         results_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "results"))
         uvicorn_log_path = os.path.join(results_dir, "uvicorn.log")
+        dev_uvicorn_log_path = os.path.abspath(os.path.join(BASE_DIR, "..", "backend", "uvicorn.log"))
         
         # Flush backend uvicorn.log buffer if any, or wait for file write
         time.sleep(2)
         
-        with open(uvicorn_log_path, "r", encoding="utf-8") as f:
-            logs = f.read()
+        logs = ""
+        if os.path.exists(uvicorn_log_path):
+            with open(uvicorn_log_path, "r", encoding="utf-8") as f:
+                logs += f.read()
+        if os.path.exists(dev_uvicorn_log_path):
+            with open(dev_uvicorn_log_path, "r", encoding="utf-8") as f:
+                logs += f.read()
             
         self.assertIn("-> Running Federated Join across local SQLite and remote Databricks...", logs)
         self.log("-> SUCCESS: Verified federated query engine execution in uvicorn console logs.")
