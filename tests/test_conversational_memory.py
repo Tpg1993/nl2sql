@@ -2,11 +2,14 @@ import os
 import sys
 import unittest
 from unittest.mock import MagicMock
+from fastapi.testclient import TestClient
 
 # Add parent directory to path so backend can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from backend.agent import EHRQueryAgent
+from backend.app import app
+from backend.auth import create_access_token
 from langchain_core.messages import AIMessage, HumanMessage
 
 class TestConversationalMemory(unittest.TestCase):
@@ -116,6 +119,79 @@ class TestConversationalMemory(unittest.TestCase):
 
         # 4. Schemas (CREATE TABLE) must be completely stripped out from history
         self.assertNotIn("CREATE TABLE", chat_history)
+
+
+class TestConversationalHistoryAPI(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        os.environ["TESTING"] = "true"
+        cls.client = TestClient(app)
+        
+        # Generate tokens
+        admin_token = create_access_token(data={"sub": "admin", "role": "admin", "attributes": {}})
+        researcher_token = create_access_token(data={"sub": "researcher", "role": "researcher", "attributes": {}})
+        
+        cls.admin_headers = {"Authorization": f"Bearer {admin_token}"}
+        cls.researcher_headers = {"Authorization": f"Bearer {researcher_token}"}
+
+    def test_history_unauthorized(self):
+        """Unauthenticated requests to history endpoint must fail with 401."""
+        response = self.client.get("/api/history/some_thread_id")
+        self.assertEqual(response.status_code, 401)
+
+    def test_history_success_and_abac_masking(self):
+        """Verify that history is retrieved and parsed correctly, with ABAC masking applied for researchers."""
+        thread_id = "test_api_history_thread_1"
+
+        # 1. Execute a query as admin to populate the checkpointer state
+        query_payload = {
+            "question": "Show details of patient Alice Green",
+            "thread_id": thread_id
+        }
+        
+        # Mock LLM to return patient query and details
+        from backend.app import agent as app_agent
+        original_llm = app_agent.llm
+        
+        mock_llm = MagicMock()
+        # Mock SQL generation first, then Mock summarization
+        mock_llm.invoke.side_effect = [
+            AIMessage(content="SELECT full_name, dob FROM patients"), # SQL Gen
+            AIMessage(content="Here are the patient details for Alice Green.") # Summarization
+        ]
+        app_agent.llm = mock_llm
+        
+        try:
+            # Run query as admin (unmasked)
+            response = self.client.post("/api/query", json=query_payload, headers=self.admin_headers)
+            self.assertEqual(response.status_code, 200)
+            
+            # 2. Query the history endpoint as Admin
+            history_response = self.client.get(f"/api/history/{thread_id}", headers=self.admin_headers)
+            self.assertEqual(history_response.status_code, 200)
+            history_data = history_response.json()
+            
+            self.assertTrue(history_data.get("success"))
+            self.assertEqual(len(history_data["history"]), 1)
+            turn = history_data["history"][0]
+            self.assertEqual(turn["question"], "Show details of patient Alice Green")
+            self.assertIn("SELECT", turn["query"])
+            
+            # Since admin is retrieving, the result should have unmasked patient names (no asterisks)
+            self.assertNotIn("*", str(turn["result"]))
+
+            # 3. Query the history endpoint as Researcher
+            researcher_history_resp = self.client.get(f"/api/history/{thread_id}", headers=self.researcher_headers)
+            self.assertEqual(researcher_history_resp.status_code, 200)
+            researcher_history_data = researcher_history_resp.json()
+            
+            researcher_turn = researcher_history_data["history"][0]
+            # The researcher should receive masked names (containing asterisks)
+            self.assertIn("*", str(researcher_turn["result"]))
+            
+        finally:
+            # Restore original LLM
+            app_agent.llm = original_llm
 
 if __name__ == "__main__":
     unittest.main()

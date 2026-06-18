@@ -1,6 +1,6 @@
 const API_BASE = "http://127.0.0.1:8000/api";
 
-// Session Thread ID Helpers
+// Session Thread ID & History Dropdown Helpers
 function getOrCreateThreadId() {
     let threadId = localStorage.getItem("thread_id");
     if (!threadId) {
@@ -13,6 +13,7 @@ function getOrCreateThreadId() {
 function resetChatSession() {
     const newThreadId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'thread_' + Math.random().toString(36).substring(2, 11);
     localStorage.setItem("thread_id", newThreadId);
+    loadChatSessions(); // Update highlight in dropdown
 
     const messages = Array.from(chatMessages.children);
     messages.forEach(child => {
@@ -24,6 +25,157 @@ function resetChatSession() {
     if (welcomeView) {
         welcomeView.style.display = "";
     }
+}
+
+function getChatSessions() {
+    try {
+        const sessions = localStorage.getItem("chat_sessions");
+        return sessions ? JSON.parse(sessions) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveChatSession(threadId, firstQuestion) {
+    if (!firstQuestion || firstQuestion.trim() === "") return;
+    
+    let title = firstQuestion.trim();
+    if (title.length > 45) {
+        title = title.substring(0, 42) + "...";
+    }
+    
+    let sessions = getChatSessions();
+    const existingIndex = sessions.findIndex(s => s.threadId === threadId);
+    
+    if (existingIndex >= 0) {
+        sessions[existingIndex].timestamp = new Date().toLocaleString();
+    } else {
+        sessions.unshift({
+            threadId: threadId,
+            title: title,
+            timestamp: new Date().toLocaleString()
+        });
+    }
+    
+    sessions = sessions.slice(0, 15);
+    localStorage.setItem("chat_sessions", JSON.stringify(sessions));
+    loadChatSessions();
+}
+
+function loadChatSessions() {
+    const listEl = document.getElementById("history-dropdown-list");
+    if (!listEl) return;
+    
+    const sessions = getChatSessions();
+    const activeThreadId = getOrCreateThreadId();
+    
+    if (sessions.length === 0) {
+        listEl.innerHTML = `<div class="history-item empty">No past chats</div>`;
+        return;
+    }
+    
+    listEl.innerHTML = "";
+    sessions.forEach(session => {
+        const item = document.createElement("div");
+        item.className = "history-item";
+        if (session.threadId === activeThreadId) {
+            item.classList.add("active");
+        }
+        
+        item.innerHTML = `
+            <div class="session-title" title="${session.title}">${session.title}</div>
+            <div class="session-meta">
+                <span><i class="fa-solid fa-clock"></i> ${session.timestamp.split(',')[0]}</span>
+                <span style="opacity: 0.6; font-size: 0.6rem;">${session.threadId.substring(0, 8)}...</span>
+            </div>
+        `;
+        
+        item.addEventListener("click", () => {
+            if (session.threadId !== activeThreadId) {
+                switchChatSession(session.threadId);
+            }
+        });
+        
+        listEl.appendChild(item);
+    });
+}
+
+async function switchChatSession(threadId) {
+    localStorage.setItem("thread_id", threadId);
+    loadChatSessions();
+    
+    const messages = Array.from(chatMessages.children);
+    messages.forEach(child => {
+        if (child !== welcomeView) {
+            child.remove();
+        }
+    });
+    
+    if (welcomeView) {
+        welcomeView.style.display = "none";
+    }
+    
+    const loaderId = appendTypingIndicator();
+    scrollToBottom();
+    
+    try {
+        const headers = getAuthHeaders();
+        const response = await fetch(`${API_BASE}/history/${threadId}`, {
+            headers: headers
+        });
+        
+        removeTypingIndicator(loaderId);
+        
+        if (response.status === 401) {
+            localStorage.removeItem("access_token");
+            document.getElementById("login-overlay").style.display = "flex";
+            appendAssistantError("Your session has expired. Please authenticate.");
+            return;
+        }
+        
+        if (!response.ok) {
+            throw new Error(`Server returned HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data.success && data.history) {
+            if (data.history.length === 0) {
+                if (welcomeView) welcomeView.style.display = "";
+            } else {
+                data.history.forEach(turn => {
+                    appendMessage(turn.question, "user");
+                    appendAssistantResponse(
+                        turn.query,
+                        turn.result || "No records found or empty query output.",
+                        null,
+                        false,
+                        turn.summary,
+                        null,
+                        null,
+                        "sarvam-105b",
+                        0,
+                        false,
+                        {},
+                        0.0,
+                        turn.question,
+                        [],
+                        0.0,
+                        [],
+                        [],
+                        [],
+                        ""
+                    );
+                });
+            }
+        } else {
+            appendAssistantError("Failed to retrieve chat history from server.");
+        }
+    } catch (err) {
+        console.error("Failed to load chat history:", err);
+        removeTypingIndicator(loaderId);
+        appendAssistantError("Could not retrieve session history. Check network connection.");
+    }
+    scrollToBottom();
 }
 
 // DOM Elements
@@ -44,6 +196,7 @@ window.addEventListener("DOMContentLoaded", () => {
     initSidebarCollapse();
     initLogout();
     getOrCreateThreadId();
+    loadChatSessions();
 
     const newChatBtn = document.getElementById("new-chat-btn");
     if (newChatBtn) {
@@ -323,6 +476,7 @@ async function submitQuestion(question) {
         
         const data = await response.json();
         if (data.success) {
+            saveChatSession(getOrCreateThreadId(), question);
             appendAssistantResponse(data.query, data.result, data.tokens, data.cached, data.summary, data.latency_ms, data.latency_breakdown, data.model, data.retries, data.is_expert_matched, data.lineage, data.estimated_cost, question, data.retrieved_tables, data.rag_savings_pct, data.retrieved_few_shots, data.scan_breakdown, data.optimizer_advisories, data.raw_plan);
         } else {
             appendAssistantError(data.error || "An error occurred during query generation.");

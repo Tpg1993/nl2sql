@@ -1174,3 +1174,86 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
             "rag_savings_pct": 0.0,
             "retrieved_few_shots": []
         }
+
+
+@app.get("/api/history/{thread_id}")
+def get_thread_history(thread_id: str, current_user: dict = Depends(get_current_user)):
+    """Retrieves and parses the conversational message history for a given session thread ID."""
+    if not agent:
+        raise HTTPException(status_code=500, detail="Database agent is not initialized.")
+    try:
+        from langchain_core.messages import AIMessage, HumanMessage
+        
+        config = {"configurable": {"thread_id": thread_id}}
+        state = agent.agent.get_state(config)
+        messages = state.values.get("messages", [])
+        
+        # Group messages into sequential conversation turns
+        turns = []
+        current_turn = None
+        
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                if current_turn:
+                    turns.append(current_turn)
+                current_turn = {
+                    "question": msg.content,
+                    "ai_messages": []
+                }
+            elif isinstance(msg, AIMessage) and current_turn is not None:
+                current_turn["ai_messages"].append(msg.content)
+                
+        if current_turn:
+            turns.append(current_turn)
+            
+        resolved_turns = []
+        for turn in turns:
+            question = turn["question"]
+            ai_msgs = turn["ai_messages"]
+            
+            sql = ""
+            result = ""
+            summary = ""
+            
+            non_sql_non_schema = []
+            for content in ai_msgs:
+                if "SELECT" in content.upper() and not sql:
+                    sql = content
+                elif "CREATE TABLE" in content:
+                    pass
+                else:
+                    non_sql_non_schema.append(content)
+                    
+            if len(non_sql_non_schema) == 1:
+                summary = non_sql_non_schema[0]
+            elif len(non_sql_non_schema) >= 2:
+                summary = non_sql_non_schema[-1]
+                result = non_sql_non_schema[0]
+                
+            # Apply dynamic masking on historical raw results if applicable
+            masked_result = result
+            if result and sql:
+                try:
+                    # Apply ABAC/PII policy masking just like E2E run
+                    parsed_result = ast.literal_eval(result)
+                    masked_parsed = apply_policy_masking(parsed_result, sql, current_user, agent)
+                    masked_result = masked_parsed
+                except Exception:
+                    try:
+                        import json
+                        parsed_result = json.loads(result)
+                        masked_parsed = apply_policy_masking(parsed_result, sql, current_user, agent)
+                        masked_result = masked_parsed
+                    except Exception:
+                        pass
+                
+            resolved_turns.append({
+                "question": question,
+                "query": sql,
+                "result": masked_result,
+                "summary": summary
+            })
+            
+        return {"success": True, "history": resolved_turns}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
