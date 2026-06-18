@@ -464,6 +464,8 @@ class EHRQueryAgent:
         target_msg.content = sql_query
 
         try:
+            if not sql_query or not sql_query.strip():
+                raise ValueError("Security violation: Safe SQL query could not be compiled for this request.")
 
             # Security Guardrail Check
             self.audit_sql_query(sql_query)
@@ -537,6 +539,9 @@ class EHRQueryAgent:
             is_security = (
                 "security violation" in err_str_lower or
                 "readonly database" in err_str_lower or
+                "read-only" in err_str_lower or
+                "read only" in err_str_lower or
+                "write violation" in err_str_lower or
                 "permission denied" in err_str_lower or
                 "does not have privilege" in err_str_lower or
                 "unauthorized" in err_str_lower

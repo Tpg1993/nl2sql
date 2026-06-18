@@ -1046,9 +1046,13 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
         success = True
         error_message = None
         if isinstance(raw_result, str) and raw_result.startswith("Error executing query:"):
-            success = False
-            error_message = raw_result
-            parsed_data = []
+            if "Security violation" in raw_result or "Cost violation" in raw_result:
+                success = True
+                parsed_data = raw_result
+            else:
+                success = False
+                error_message = raw_result
+                parsed_data = []
         else:
             try:
                 parsed_data = ast.literal_eval(raw_result)
