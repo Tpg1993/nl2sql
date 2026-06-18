@@ -2356,6 +2356,12 @@ function openChartModal(data, encodedQuestion, headers = []) {
     xSelect.innerHTML = "";
     ySelect.innerHTML = "";
     
+    // Always add a fallback "Row Index" option to the X-Axis
+    const rowIdxOpt = document.createElement("option");
+    rowIdxOpt.value = "__row_index__";
+    rowIdxOpt.textContent = "Row Index";
+    xSelect.appendChild(rowIdxOpt);
+    
     keys.forEach(k => {
         const colIndex = parseInt(k);
         const colLabel = (Array.isArray(firstRow) && headers && headers[colIndex]) ? headers[colIndex] : k;
@@ -2388,13 +2394,20 @@ function openChartModal(data, encodedQuestion, headers = []) {
     
     // Auto-select a numeric field for Y-Axis and a non-numeric for X-Axis if possible
     if (xSelect.options.length > 1 && ySelect.options.length > 0) {
+        let selectedX = false;
         // Find first key that is NOT numeric to be X-Axis
         for (let i = 0; i < keys.length; i++) {
             const k = keys[i];
-            if (k !== ySelect.value) {
+            const isYKey = Array.from(ySelect.options).some(opt => opt.value === k);
+            if (!isYKey) {
                 xSelect.value = k;
+                selectedX = true;
                 break;
             }
+        }
+        // If all columns are numeric, default to Row Index for X-Axis
+        if (!selectedX) {
+            xSelect.value = "__row_index__";
         }
     }
     
@@ -2448,6 +2461,19 @@ function renderQueryChart() {
     const yKey = ySelect.value;
     const type = document.getElementById("chart-type-select").value;
     
+    // Dynamically rename labels for radial charts
+    const xLabelEl = document.getElementById("chart-x-label");
+    const yLabelEl = document.getElementById("chart-y-label");
+    if (xLabelEl && yLabelEl) {
+        if (type === 'pie' || type === 'doughnut') {
+            xLabelEl.innerHTML = `<i class="fa-solid fa-chart-pie"></i> Slice Labels`;
+            yLabelEl.innerHTML = `<i class="fa-solid fa-arrow-trend-up"></i> Slice Values`;
+        } else {
+            xLabelEl.innerHTML = `<i class="fa-solid fa-arrow-right-long"></i> X-Axis (Labels)`;
+            yLabelEl.innerHTML = `<i class="fa-solid fa-arrow-up-long"></i> Y-Axis (Values)`;
+        }
+    }
+    
     if (!xKey || !yKey) return;
     
     const xLabelText = xSelect.options[xSelect.selectedIndex] ? xSelect.options[xSelect.selectedIndex].text : xKey;
@@ -2461,7 +2487,12 @@ function renderQueryChart() {
     // Limit data to prevent clutter (max 25 rows)
     const displayData = currentChartData.slice(0, 25);
     
-    const labels = displayData.map(row => String(row[xKey] === null || row[xKey] === undefined ? 'NULL' : row[xKey]));
+    const labels = displayData.map((row, idx) => {
+        if (xKey === "__row_index__") {
+            return `Row ${idx + 1}`;
+        }
+        return String(row[xKey] === null || row[xKey] === undefined ? 'NULL' : row[xKey]);
+    });
     const values = displayData.map(row => {
         const val = row[yKey];
         if (typeof val === 'number') return val;
