@@ -66,38 +66,92 @@ function loadChatSessions() {
     const listEl = document.getElementById("sidebar-history-list");
     if (!listEl) return;
     
-    const sessions = getChatSessions();
+    let sessions = getChatSessions();
     const activeThreadId = getOrCreateThreadId();
     
+    // Filter sessions by search term
+    const searchInput = document.getElementById("history-search-input");
+    const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : "";
+    
+    if (searchTerm) {
+        sessions = sessions.filter(s => s.title.toLowerCase().includes(searchTerm));
+    }
+    
     if (sessions.length === 0) {
-        listEl.innerHTML = `<div class="history-item empty">No past chats</div>`;
+        listEl.innerHTML = searchTerm 
+            ? `<div class="history-item empty">No matching chats</div>`
+            : `<div class="history-item empty">No past chats</div>`;
         return;
     }
     
     listEl.innerHTML = "";
+    
+    // Grouping by Date
+    const todayStr = new Date().toDateString();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toDateString();
+    
+    const groups = {
+        today: [],
+        yesterday: [],
+        older: []
+    };
+    
     sessions.forEach(session => {
-        const item = document.createElement("div");
-        item.className = "history-item";
-        if (session.threadId === activeThreadId) {
-            item.classList.add("active");
-        }
-        
-        item.innerHTML = `
-            <div class="session-title" title="${session.title}">${session.title}</div>
-            <div class="session-meta">
-                <span><i class="fa-solid fa-clock"></i> ${session.timestamp.split(',')[0]}</span>
-                <span style="opacity: 0.6; font-size: 0.6rem;">${session.threadId.substring(0, 8)}...</span>
-            </div>
-        `;
-        
-        item.addEventListener("click", () => {
-            if (session.threadId !== activeThreadId) {
-                switchChatSession(session.threadId);
+        try {
+            const dateObj = new Date(session.timestamp);
+            const dateStr = dateObj.toDateString();
+            if (dateStr === todayStr) {
+                groups.today.push(session);
+            } else if (dateStr === yesterdayStr) {
+                groups.yesterday.push(session);
+            } else {
+                groups.older.push(session);
             }
-        });
-        
-        listEl.appendChild(item);
+        } catch (e) {
+            groups.older.push(session);
+        }
     });
+    
+    const renderGroup = (headerText, groupSessions) => {
+        if (groupSessions.length === 0) return;
+        
+        const header = document.createElement("div");
+        header.className = "history-group-header";
+        header.innerHTML = `<span>${headerText}</span>`;
+        listEl.appendChild(header);
+        
+        groupSessions.forEach(session => {
+            const item = document.createElement("div");
+            item.className = "history-item";
+            if (session.threadId === activeThreadId) {
+                item.classList.add("active");
+            }
+            
+            let displayTime = session.timestamp.split(',')[0];
+            
+            item.innerHTML = `
+                <div class="session-title" title="${session.title}">${session.title}</div>
+                <div class="session-meta">
+                    <span><i class="fa-solid fa-clock"></i> ${displayTime}</span>
+                    <span style="opacity: 0.6; font-size: 0.6rem;">${session.threadId.substring(0, 8)}...</span>
+                </div>
+            `;
+            
+            item.addEventListener("click", () => {
+                if (session.threadId !== activeThreadId) {
+                    switchChatSession(session.threadId);
+                }
+            });
+            
+            listEl.appendChild(item);
+        });
+    };
+    
+    renderGroup("Today", groups.today);
+    renderGroup("Yesterday", groups.yesterday);
+    renderGroup("Older", groups.older);
 }
 
 async function switchChatSession(threadId) {
@@ -201,6 +255,14 @@ window.addEventListener("DOMContentLoaded", () => {
     const sidebarNewChatBtn = document.getElementById("sidebar-new-chat-btn");
     if (sidebarNewChatBtn) {
         sidebarNewChatBtn.addEventListener("click", resetChatSession);
+    }
+
+    // Sidebar search input listener
+    const searchInput = document.getElementById("history-search-input");
+    if (searchInput) {
+        searchInput.addEventListener("input", () => {
+            loadChatSessions();
+        });
     }
 
     // Sidebar tabs toggle logic
@@ -748,6 +810,7 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                 
                 <!-- Query Result Table -->
                 <div class="result-table-wrapper">
+                    ${(Array.isArray(queryResult) && queryResult.length > 0) ? `<button class="export-csv-btn" onclick="triggerCSVDownload(this)"><i class="fa-solid fa-download"></i> Export CSV</button>` : ""}
                     ${tableHtml}
                 </div>
                 
@@ -781,6 +844,12 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                         <i class="fa-solid fa-chart-line"></i> Visualize Results
                     </button>
                     ` : ''}
+                    
+                    <!-- RLHF Query Feedback Widget -->
+                    <div class="feedback-widget" data-question="${encodeURIComponent(questionText)}" data-sql="${encodeURIComponent(sqlQuery)}">
+                        <button class="feedback-btn upvote" title="Correct Query Output" onclick="handleFeedback(this, 1)"><i class="fa-solid fa-thumbs-up"></i></button>
+                        <button class="feedback-btn downvote" title="Incorrect Query Output" onclick="handleFeedback(this, -1)"><i class="fa-solid fa-thumbs-down"></i></button>
+                    </div>
                 </div>
 
                 <!-- Query Lineage Tree details -->
@@ -2896,6 +2965,114 @@ function renderQueryChart() {
     }
     
     currentChartInstance = new Chart(canvas, chartConfig);
+}
+
+
+// =====================================================================
+// EXPORT TABLE DATA TO CSV
+// =====================================================================
+function triggerCSVDownload(btn) {
+    const table = btn.parentElement.querySelector("table");
+    if (!table) return;
+    
+    const rows = Array.from(table.querySelectorAll("tr"));
+    const csvContent = rows.map(row => {
+        const cells = Array.from(row.querySelectorAll("th, td"));
+        return cells.map(cell => {
+            let text = cell.innerText.trim();
+            // Remove Lock icon text or extra symbols if needed
+            text = text.replace(/"/g, '""');
+            return `"${text}"`;
+        }).join(",");
+    }).join("\n");
+    
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `query_export_${Date.now()}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// =====================================================================
+// RLHF FEEDBACK HANDLING
+// =====================================================================
+function handleFeedback(btn, rating) {
+    const widget = btn.parentElement;
+    const question = decodeURIComponent(widget.getAttribute("data-question"));
+    const sql = decodeURIComponent(widget.getAttribute("data-sql"));
+    
+    const upBtn = widget.querySelector(".upvote");
+    const downBtn = widget.querySelector(".downvote");
+    
+    if (rating === 1) {
+        upBtn.classList.add("active");
+        downBtn.classList.remove("active");
+        
+        const existingForm = widget.parentElement.parentElement.querySelector(".feedback-form-card");
+        if (existingForm) existingForm.remove();
+        
+        submitFeedbackData(question, sql, 1, "");
+    } else {
+        downBtn.classList.add("active");
+        upBtn.classList.remove("active");
+        
+        const messageBody = widget.parentElement.parentElement;
+        let formCard = messageBody.querySelector(".feedback-form-card");
+        
+        if (!formCard) {
+            formCard = document.createElement("div");
+            formCard.className = "feedback-form-card";
+            formCard.innerHTML = `
+                <span style="font-size: 0.72rem; font-weight:600; color:var(--text-secondary);"><i class="fa-solid fa-circle-exclamation"></i> What was incorrect about this query result?</span>
+                <textarea placeholder="e.g., Column name 'gender' should be used instead of 'sex', or table joins were incorrect..."></textarea>
+                <div style="display:flex; justify-content:flex-end; gap:8px;">
+                    <button class="feedback-submit-btn">Submit Suggestion</button>
+                </div>
+            `;
+            
+            formCard.querySelector(".feedback-submit-btn").addEventListener("click", () => {
+                const comment = formCard.querySelector("textarea").value.trim();
+                submitFeedbackData(question, sql, -1, comment);
+                
+                formCard.innerHTML = `<span style="font-size: 0.72rem; color: var(--success); font-weight:600;"><i class="fa-solid fa-circle-check"></i> Thank you! Your feedback has been submitted to the analyst queue.</span>`;
+                setTimeout(() => {
+                    formCard.remove();
+                }, 3000);
+            });
+            
+            messageBody.appendChild(formCard);
+        }
+    }
+}
+
+async function submitFeedbackData(question, sql, rating, comment) {
+    const threadId = getOrCreateThreadId();
+    try {
+        const response = await fetch(`${API_BASE}/feedback`, {
+            method: "POST",
+            headers: {
+                ...getAuthHeaders(),
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                thread_id: threadId,
+                question: question,
+                sql_query: sql,
+                rating: rating,
+                comment: comment
+            })
+        });
+        
+        if (!response.ok) {
+            console.error("Failed to submit feedback:", response.status);
+        }
+    } catch (err) {
+        console.error("Network error submitting feedback:", err);
+    }
 }
 
 

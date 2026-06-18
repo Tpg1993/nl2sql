@@ -338,6 +338,14 @@ class QueryRequest(BaseModel):
     thread_id: str | None = None
 
 
+class FeedbackRequest(BaseModel):
+    thread_id: str
+    question: str
+    sql_query: str
+    rating: int  # 1 for up, -1 for down
+    comment: str | None = None
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -1255,5 +1263,47 @@ def get_thread_history(thread_id: str, current_user: dict = Depends(get_current_
             })
             
         return {"success": True, "history": resolved_turns}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/feedback")
+def submit_feedback(feedback_req: FeedbackRequest, current_user: dict = Depends(get_current_user)):
+    """Logs user feedback (ratings and comments) for clinical queries into a SQLite database."""
+    try:
+        import sqlite3
+        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.db")
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS query_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                thread_id TEXT NOT NULL,
+                username TEXT NOT NULL,
+                question TEXT NOT NULL,
+                sql_query TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                comment TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        
+        cursor.execute("""
+            INSERT INTO query_feedback (thread_id, username, question, sql_query, rating, comment)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            feedback_req.thread_id,
+            current_user.get("username", "anonymous"),
+            feedback_req.question,
+            feedback_req.sql_query,
+            feedback_req.rating,
+            feedback_req.comment
+        ))
+        conn.commit()
+        conn.close()
+        
+        return {"success": True, "message": "Feedback submitted successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1402,5 +1402,264 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
+    def test_19_sidebar_search_and_date_grouping(self):
+        self.log("[Test 19] Testing sidebar session search and date-based grouping...")
+        driver = self.driver
+        self.login("admin", ADMIN_PASSWORD)
+        
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # 1. Inject custom chat sessions into localStorage
+        driver.execute_script("""
+            localStorage.setItem('chat_sessions', JSON.stringify([
+                {threadId: 't1', title: 'Searchable Today Query', timestamp: new Date().toLocaleString()},
+                {threadId: 't2', title: 'Another Today Query', timestamp: new Date().toLocaleString()},
+                {threadId: 't3', title: 'Yesterday Query', timestamp: new Date(Date.now() - 86400000).toLocaleString()},
+                {threadId: 't4', title: 'Older Query', timestamp: new Date(Date.now() - 3*86400000).toLocaleString()}
+            ]));
+            window.loadChatSessions();
+        """)
+        time.sleep(1)
+        
+        # 2. Verify history group headers are visible and contain grouping names
+        group_headers = driver.find_elements(By.CLASS_NAME, "history-group-header")
+        self.assertGreater(len(group_headers), 0)
+        group_texts = [g.text.strip() for g in group_headers]
+        self.assertIn("TODAY", group_texts)
+        self.assertIn("YESTERDAY", group_texts)
+        self.assertIn("OLDER", group_texts)
+        self.log("-> Group headers verified: " + str(group_texts))
+        
+        # 3. Verify total session count
+        items = driver.find_elements(By.CLASS_NAME, "history-item")
+        titles = [item.find_element(By.CLASS_NAME, "session-title").text for item in items if item.find_elements(By.CLASS_NAME, "session-title")]
+        self.assertEqual(len(titles), 4)
+        
+        # 4. Perform search filtering
+        search_input = driver.find_element(By.ID, "history-search-input")
+        search_input.clear()
+        search_input.send_keys("Searchable")
+        time.sleep(1)
+        
+        items = driver.find_elements(By.CLASS_NAME, "history-item")
+        filtered_titles = [item.find_element(By.CLASS_NAME, "session-title").text for item in items if item.find_elements(By.CLASS_NAME, "session-title")]
+        self.assertEqual(len(filtered_titles), 1)
+        self.assertEqual(filtered_titles[0], "Searchable Today Query")
+        self.log("-> Search filtering verified successfully with query 'Searchable'.")
+        
+        # 5. Clear search input and search for another query
+        search_input.clear()
+        search_input.send_keys("Yesterday")
+        time.sleep(1)
+        
+        items = driver.find_elements(By.CLASS_NAME, "history-item")
+        filtered_titles = [item.find_element(By.CLASS_NAME, "session-title").text for item in items if item.find_elements(By.CLASS_NAME, "session-title")]
+        self.assertEqual(len(filtered_titles), 1)
+        self.assertEqual(filtered_titles[0], "Yesterday Query")
+        self.log("-> Search filtering verified successfully with query 'Yesterday'.")
+        
+        # Capture a screenshot
+        try:
+            screenshots_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots"))
+            os.makedirs(screenshots_dir, exist_ok=True)
+            screenshot_path = os.path.join(screenshots_dir, "18_Sidebar_Search_Filtered.png")
+            driver.save_screenshot(screenshot_path)
+            self.log(f"-> Captured sidebar search screenshot: {screenshot_path}")
+        except Exception as e:
+            self.log(f"-> Failed to capture search screenshot: {e}")
+            
+        self._test_has_failed = False
+        self.logout()
+
+    def test_20_csv_dataset_export(self):
+        self.log("[Test 20] Testing client-side CSV dataset export...")
+        driver = self.driver
+        self.login("admin", ADMIN_PASSWORD)
+        
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # 1. Mock window anchor click to capture CSV text download
+        driver.execute_script("""
+            window.__downloaded_csv_data = null;
+            const originalClick = HTMLAnchorElement.prototype.click;
+            HTMLAnchorElement.prototype.click = function() {
+                if (this.download.startsWith("query_export_") || this.href.startsWith("blob:")) {
+                    fetch(this.href)
+                        .then(r => r.text())
+                        .then(text => { window.__downloaded_csv_data = text; });
+                }
+                originalClick.apply(this, arguments);
+            };
+        """)
+        
+        # 2. Append mock assistant response with dataset details
+        driver.execute_script("""
+            appendAssistantResponse(
+                "SELECT name, age FROM patients",
+                [["*** (Protected Name, Lock)", 12], ["John Doe", 45]],
+                {"input": 10, "output": 10, "total": 20},
+                false,
+                "List of patient details",
+                120.5,
+                {},
+                "gpt-4o-mini",
+                0,
+                false,
+                {},
+                0.0,
+                "Show patient name and age",
+                [],
+                0.0,
+                [],
+                [],
+                [],
+                ""
+            );
+        """)
+        time.sleep(1)
+        
+        # 3. Verify export button is present
+        export_btn = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "export-csv-btn"))
+        )
+        self.assertTrue(export_btn.is_displayed())
+        
+        # 4. Click the CSV export button
+        export_btn.click()
+        
+        # 5. Wait for the captured CSV data and assert its values
+        csv_data = WebDriverWait(driver, 5).until(
+            lambda d: d.execute_script("return window.__downloaded_csv_data;")
+        )
+        self.assertIsNotNone(csv_data)
+        
+        lines = [line.strip() for line in csv_data.strip().split("\n") if line.strip()]
+        self.assertEqual(len(lines), 3)
+        self.assertEqual(lines[0], '"NAME","AGE"')
+        self.assertEqual(lines[1], '"*** (Protected Name, Lock)","12"')
+        self.assertEqual(lines[2], '"John Doe","45"')
+        
+        self.log("-> SUCCESS: Preserved HIPAA masking cells inside exported CSV: " + str(lines))
+        
+        # Capture a screenshot
+        try:
+            screenshots_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots"))
+            os.makedirs(screenshots_dir, exist_ok=True)
+            screenshot_path = os.path.join(screenshots_dir, "19_CSV_Export_Dataset.png")
+            driver.save_screenshot(screenshot_path)
+            self.log(f"-> Captured CSV export screenshot: {screenshot_path}")
+        except Exception as e:
+            self.log(f"-> Failed to capture CSV screenshot: {e}")
+            
+        self._test_has_failed = False
+        self.logout()
+
+    def test_21_query_feedback_widget(self):
+        self.log("[Test 21] Testing RLHF query feedback widget thumbs ratings and comments...")
+        driver = self.driver
+        self.login("admin", ADMIN_PASSWORD)
+        
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # 1. Append mock assistant response
+        driver.execute_script("""
+            appendAssistantResponse(
+                "SELECT * FROM vitals WHERE patient_id = 5",
+                [[5, "BP", "120/80"]],
+                {"input": 12, "output": 15, "total": 27},
+                false,
+                "Vitals for patient 5",
+                95.0,
+                {},
+                "gpt-4o-mini",
+                0,
+                false,
+                {},
+                0.0,
+                "Show vital records for patient 5",
+                [],
+                0.0,
+                [],
+                [],
+                [],
+                ""
+            );
+        """)
+        time.sleep(1)
+        
+        # 2. Check widget buttons are displayed
+        feedback_widget = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "feedback-widget"))
+        )
+        self.assertTrue(feedback_widget.is_displayed())
+        
+        up_btn = feedback_widget.find_element(By.CLASS_NAME, "upvote")
+        down_btn = feedback_widget.find_element(By.CLASS_NAME, "downvote")
+        self.assertTrue(up_btn.is_displayed())
+        self.assertTrue(down_btn.is_displayed())
+        
+        # 3. Test thumbs-up rating click
+        up_btn.click()
+        time.sleep(1)
+        self.assertIn("active", up_btn.get_attribute("class"))
+        self.assertNotIn("active", down_btn.get_attribute("class"))
+        self.log("-> Upvote button set active state.")
+        
+        # 4. Test thumbs-down rating click (switches active and reveals suggestion form)
+        down_btn.click()
+        time.sleep(1)
+        self.assertIn("active", down_btn.get_attribute("class"))
+        self.assertNotIn("active", up_btn.get_attribute("class"))
+        self.log("-> Downvote button toggled, upvote cleared.")
+        
+        # 5. Check if suggestion text card is rendered
+        form_card = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "feedback-form-card"))
+        )
+        self.assertTrue(form_card.is_displayed())
+        
+        textarea = form_card.find_element(By.TAG_NAME, "textarea")
+        submit_btn = form_card.find_element(By.CLASS_NAME, "feedback-submit-btn")
+        
+        # 6. Enter feedback message and submit
+        feedback_text = "E2E Test: Suggest checking heart rate fields."
+        textarea.send_keys(feedback_text)
+        submit_btn.click()
+        time.sleep(2)
+        
+        # 7. Verify feedback logged in database
+        import sqlite3
+        db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend", "cache.db"))
+        self.assertTrue(os.path.exists(db_path))
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT comment FROM query_feedback WHERE rating = -1 ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
+        conn.close()
+        
+        self.assertIsNotNone(row)
+        self.assertEqual(row[0], feedback_text)
+        self.log("-> SUCCESS: Feedback comment correctly saved to query_feedback table in cache.db.")
+        
+        # Capture screenshot
+        try:
+            screenshots_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots"))
+            os.makedirs(screenshots_dir, exist_ok=True)
+            screenshot_path = os.path.join(screenshots_dir, "20_Feedback_Widget_Suggestion.png")
+            driver.save_screenshot(screenshot_path)
+            self.log(f"-> Captured feedback suggestion screenshot: {screenshot_path}")
+        except Exception as e:
+            self.log(f"-> Failed to capture feedback screenshot: {e}")
+            
+        self._test_has_failed = False
+        self.logout()
+
 if __name__ == "__main__":
     unittest.main()
