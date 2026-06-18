@@ -23,8 +23,57 @@ window.addEventListener("DOMContentLoaded", () => {
     const typeSelect = document.getElementById("chart-type-select");
     const downloadBtn = document.getElementById("download-chart-btn");
     
-    if (xSelect) xSelect.addEventListener("change", renderQueryChart);
-    if (ySelect) ySelect.addEventListener("change", renderQueryChart);
+    const handleAxisChange = (changedSelect) => {
+        const xSel = document.getElementById("chart-x-select");
+        const ySel = document.getElementById("chart-y-select");
+        if (!xSel || !ySel) return;
+        
+        if (xSel.value === ySel.value) {
+            if (changedSelect === xSel) {
+                let foundNewY = false;
+                for (let i = 0; i < ySel.options.length; i++) {
+                    const opt = ySel.options[i];
+                    if (opt.value !== xSel.value) {
+                        ySel.value = opt.value;
+                        foundNewY = true;
+                        break;
+                    }
+                }
+                if (!foundNewY) {
+                    for (let i = 0; i < xSel.options.length; i++) {
+                        const opt = xSel.options[i];
+                        if (opt.value !== ySel.value) {
+                            xSel.value = opt.value;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                let foundNewX = false;
+                for (let i = 0; i < xSel.options.length; i++) {
+                    const opt = xSel.options[i];
+                    if (opt.value !== ySel.value) {
+                        xSel.value = opt.value;
+                        foundNewX = true;
+                        break;
+                    }
+                }
+            }
+        }
+    };
+    
+    if (xSelect) {
+        xSelect.addEventListener("change", () => {
+            handleAxisChange(xSelect);
+            renderQueryChart();
+        });
+    }
+    if (ySelect) {
+        ySelect.addEventListener("change", () => {
+            handleAxisChange(ySelect);
+            renderQueryChart();
+        });
+    }
     if (typeSelect) typeSelect.addEventListener("change", renderQueryChart);
     
     if (downloadBtn) {
