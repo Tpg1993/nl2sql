@@ -4,19 +4,19 @@ This document outlines the planned future enhancements and next-generation featu
 
 ---
 
-## 1. UI/UX & Interactive Analytics
+## 1. UI/UX & Interactive Analytics [Completed]
 
 ### 1.1 Sidebar Session Categorization & Search
-* **Date-based Grouping**: Categorize chat history cards in the left sidebar under logical groups (e.g., "Today", "Yesterday", "Previous 7 Days") similar to Gemini/ChatGPT.
-* **Search History**: Implement a client-side search bar at the top of the "Chats" panel to filter saved sessions by title or timestamp.
+* [x] **Date-based Grouping**: Categorize chat history cards in the left sidebar under logical groups (e.g., "Today", "Yesterday", "Previous 7 Days") similar to Gemini/ChatGPT.
+* [x] **Search History**: Implement a client-side search bar at the top of the "Chats" panel to filter saved sessions by title or timestamp.
 
 ### 1.2 Enhanced Charting & Analytics Panel
-* **Advanced Chart Types**: Extend Chart.js integration to support Scatter plots, Heatmaps, and Radar charts for complex medical/demographic datasets.
-* **Direct Exporting**: Add buttons inside the query result cards to download datasets as **CSV** or formatted **Excel** sheets directly from the frontend.
+* [x] **Advanced Chart Types**: Extend Chart.js integration to support Scatter plots, Heatmaps, and Radar charts for complex medical/demographic datasets.
+* [x] **Direct Exporting**: Add buttons inside the query result cards to download datasets as **CSV** or formatted **Excel** sheets directly from the frontend.
 
 ### 1.3 Interactive RLHF Feedback Widget
-* **Analyst Annotations**: Let non-admin users flag generated SQL queries with thumbs-up/down feedback and attach comments.
-* **Correction Pipeline**: Flagged queries are routed to an admin dashboard for quick verification and conversion into Expert SQL overrides.
+* [x] **Analyst Annotations**: Let non-admin users flag generated SQL queries with thumbs-up/down feedback and attach comments.
+* [x] **Correction Pipeline**: Flagged queries are routed to an admin dashboard for quick verification and conversion into Expert SQL overrides.
 
 ---
 
