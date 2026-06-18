@@ -520,7 +520,7 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                     }
                     ${cached ? `<span class="meta-item cache-badge"><i class="fa-solid fa-cloud-bolt"></i> Served from Cache</span>` : ''}
                     ${isChartable(queryResult) ? `
-                    <button class="visualize-results-btn" onclick="openChartModal(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(queryResult))}')), '${encodeURIComponent(questionText)}')">
+                    <button class="visualize-results-btn" onclick="openChartModal(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(queryResult))}')), '${encodeURIComponent(questionText)}', JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(headers))}')))">
                         <i class="fa-solid fa-chart-line"></i> Visualize Results
                     </button>
                     ` : ''}
@@ -2339,7 +2339,7 @@ function isChartable(data) {
     return hasNumeric;
 }
 
-function openChartModal(data, encodedQuestion) {
+function openChartModal(data, encodedQuestion, headers = []) {
     const question = decodeURIComponent(encodedQuestion);
     currentChartData = data;
     
@@ -2357,10 +2357,13 @@ function openChartModal(data, encodedQuestion) {
     ySelect.innerHTML = "";
     
     keys.forEach(k => {
+        const colIndex = parseInt(k);
+        const colLabel = (Array.isArray(firstRow) && headers && headers[colIndex]) ? headers[colIndex] : k;
+        
         // Populate X-Axis options
         const xOpt = document.createElement("option");
         xOpt.value = k;
-        xOpt.textContent = k;
+        xOpt.textContent = colLabel;
         xSelect.appendChild(xOpt);
         
         // Populate Y-Axis options (only numeric/parseable keys)
@@ -2378,7 +2381,7 @@ function openChartModal(data, encodedQuestion) {
         if (isNum) {
             const yOpt = document.createElement("option");
             yOpt.value = k;
-            yOpt.textContent = k;
+            yOpt.textContent = colLabel;
             ySelect.appendChild(yOpt);
         }
     });
@@ -2439,11 +2442,16 @@ function renderQueryChart() {
     const canvas = document.getElementById("query-chart-canvas");
     if (!canvas) return;
     
-    const xKey = document.getElementById("chart-x-select").value;
-    const yKey = document.getElementById("chart-y-select").value;
+    const xSelect = document.getElementById("chart-x-select");
+    const ySelect = document.getElementById("chart-y-select");
+    const xKey = xSelect.value;
+    const yKey = ySelect.value;
     const type = document.getElementById("chart-type-select").value;
     
     if (!xKey || !yKey) return;
+    
+    const xLabelText = xSelect.options[xSelect.selectedIndex] ? xSelect.options[xSelect.selectedIndex].text : xKey;
+    const yLabelText = ySelect.options[ySelect.selectedIndex] ? ySelect.options[ySelect.selectedIndex].text : yKey;
     
     // Destroy existing instance to prevent overlapping rendering bugs
     if (currentChartInstance) {
@@ -2482,7 +2490,7 @@ function renderQueryChart() {
         data: {
             labels: labels,
             datasets: [{
-                label: yKey,
+                label: yLabelText,
                 data: values,
                 backgroundColor: type === 'line' ? 'rgba(123, 44, 191, 0.2)' : barBackgrounds,
                 borderColor: type === 'line' ? '#7b2cbf' : barBorders,
@@ -2532,6 +2540,16 @@ function renderQueryChart() {
                         family: 'Outfit, sans-serif',
                         size: 10
                     }
+                },
+                title: {
+                    display: true,
+                    text: xLabelText,
+                    color: textColor,
+                    font: {
+                        family: 'Outfit, sans-serif',
+                        size: 11,
+                        weight: 'bold'
+                    }
                 }
             },
             y: {
@@ -2543,6 +2561,16 @@ function renderQueryChart() {
                     font: {
                         family: 'Outfit, sans-serif',
                         size: 10
+                    }
+                },
+                title: {
+                    display: true,
+                    text: yLabelText,
+                    color: textColor,
+                    font: {
+                        family: 'Outfit, sans-serif',
+                        size: 11,
+                        weight: 'bold'
                     }
                 }
             }
