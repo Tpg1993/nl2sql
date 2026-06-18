@@ -1218,8 +1218,8 @@ class EHRQueryAgent:
         output = self.agent.invoke(initial_state, config=config)
 
         
-        sql_query = ""
-        db_result = ""
+        sql_query = None
+        db_result = None
         conversational_summary = ""
         token_usage = None
         
@@ -1229,10 +1229,13 @@ class EHRQueryAgent:
         # Traverse messages backwards to separate SQL statement and DB execution outputs
         for msg in reversed(output["messages"][:-1]):
             content = msg.content
-            if "SELECT" in content.upper() and not sql_query:
+            if "SELECT" in content.upper() and sql_query is None:
                 sql_query = content
-            elif not db_result:
+            elif db_result is None and "CREATE TABLE" not in content and not isinstance(msg, HumanMessage):
                 db_result = content
+                
+        sql_query = sql_query or ""
+        db_result = db_result or ""
                 
         # Aggregate token usage across all steps
         input_tokens = 0
