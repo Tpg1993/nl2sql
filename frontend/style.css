@@ -2118,3 +2118,33 @@ body[data-theme="light"] .audit-logs-table-container td {
     background-color: rgba(0, 0, 0, 0.1);
     animation: slideDownCollapse 0.2s ease-out;
 }
+
+/* Override Target User Scope Select Styling */
+.override-username-select {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.78rem;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.override-username-select option {
+    background-color: #1e293b; /* Dark Mode dropdown background */
+    color: #f8fafc;            /* Dark Mode dropdown text */
+}
+
+/* Light Mode overrides */
+body[data-theme="light"] .override-username-select {
+    background: #ffffff;
+    color: #0f172a;
+    border-color: rgba(15, 23, 42, 0.15);
+}
+
+body[data-theme="light"] .override-username-select option {
+    background-color: #ffffff; /* Light Mode dropdown background */
+    color: #0f172a;            /* Light Mode dropdown text */
+}

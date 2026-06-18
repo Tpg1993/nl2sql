@@ -521,12 +521,12 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                         <div class="override-form-container" style="padding-top: 10px;">
                             <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
                                 <label style="font-size: 0.78rem; color: var(--text-secondary); font-weight: 500;">Target User Scope:</label>
-                                <select class="override-username-select" style="background: rgba(255,255,255,0.06); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px; padding: 4px 8px; font-size: 0.78rem; outline: none; cursor: pointer; transition: border-color 0.2s;">
-                                    <option value="global" style="background: var(--bg-card); color: var(--text-primary);">Global (All Users)</option>
-                                    <option value="admin_user_protected" style="background: var(--bg-card); color: var(--text-primary);">admin_user_protected (Admin)</option>
-                                    <option value="admin" style="background: var(--bg-card); color: var(--text-primary);">admin (Default Admin)</option>
-                                    <option value="doctor" style="background: var(--bg-card); color: var(--text-primary);">doctor (Doctor)</option>
-                                    <option value="researcher" style="background: var(--bg-card); color: var(--text-primary);">researcher (Researcher)</option>
+                                <select class="override-username-select">
+                                    <option value="global">Global (All Users)</option>
+                                    <option value="admin_user_protected">admin_user_protected (Admin)</option>
+                                    <option value="admin">admin (Default Admin)</option>
+                                    <option value="doctor">doctor (Doctor)</option>
+                                    <option value="researcher">researcher (Researcher)</option>
                                 </select>
                             </div>
                             <textarea class="override-textarea" rows="3" placeholder="Enter corrected SQL query...">${sqlQuery}</textarea>
