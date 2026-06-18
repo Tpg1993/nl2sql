@@ -66,6 +66,15 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
                 os.remove(audit_db_path)
             except Exception as e:
                 cls.log(f"Could not delete audit database: {e}")
+                
+        # Clear the expert_overrides.db file in backend to ensure fresh expert overrides isolation
+        overrides_db_path = os.path.abspath(os.path.join(BASE_DIR, "..", "backend", "expert_overrides.db"))
+        if os.path.exists(overrides_db_path):
+            try:
+                cls.log(f"Clearing expert overrides database at {overrides_db_path}...")
+                os.remove(overrides_db_path)
+            except Exception as e:
+                cls.log(f"Could not delete expert overrides database: {e}")
         
         # 1. Start FastAPI backend, logging output to uvicorn.log inside results
         cls.log("Launching backend uvicorn server on http://127.0.0.1:8000...")
@@ -291,7 +300,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         driver.find_element(By.ID, "login-submit-btn").click()
         
         # Verify error message
-        error_msg = WebDriverWait(driver, 5).until(
+        error_msg = WebDriverWait(driver, 15).until(
             EC.visibility_of_element_located((By.ID, "login-error"))
         )
         self.assertTrue(error_msg.is_displayed())

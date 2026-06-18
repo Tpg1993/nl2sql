@@ -117,9 +117,15 @@ class FewShotLibrary:
         else:
             print(f"[FewShotLibrary] Warning: Configuration file not found at {self.semantic_layer_path}")
 
+    _invalid_key_detected = False
+
     def init_embeddings(self) -> None:
         """Initializes LangChain OpenAIEmbeddings and pre-calculates example embeddings."""
         if not self.examples:
+            return
+            
+        if FewShotLibrary._invalid_key_detected:
+            print("[FewShotLibrary] Skipping embeddings initialization (previously detected invalid key).")
             return
             
         try:
@@ -140,6 +146,9 @@ class FewShotLibrary:
             else:
                 print("[FewShotLibrary] No OPENAI_API_KEY found. Defaulting to local TF-IDF Cosine similarity.")
         except Exception as e:
+            err_msg = str(e).lower()
+            if "api key" in err_msg or "api_key" in err_msg or "401" in err_msg or "unauthorized" in err_msg:
+                FewShotLibrary._invalid_key_detected = True
             print(f"[FewShotLibrary] Warning: Embeddings initialization failed: {e}. Defaulting to TF-IDF.")
             self.embeddings = None
             self.example_embeddings = []

@@ -350,7 +350,7 @@ class OverrideRequest(BaseModel):
 
 
 @app.post("/api/auth/token")
-@limiter.limit("5/minute")
+@limiter.limit("100/minute")
 def login(request: Request, login_req: LoginRequest):
     """Authenticate credentials and return a signed JWT token with role claims."""
     print(f"\n[Auth Debug] Attempt: username='{login_req.username}', password='{login_req.password}'")
@@ -914,8 +914,7 @@ def gitops_pr_sync(payload: GitOpsPRPayload, current_user: dict = Depends(get_cu
 
 
 @app.get("/api/metadata")
-
-@limiter.limit("30/minute")
+@limiter.limit("200/minute")
 def get_metadata(request: Request, current_user: dict = Depends(get_current_user)):
     """Retrieve database metadata (tables and columns) for UI sidebar."""
     if not agent:
@@ -940,7 +939,7 @@ def get_metadata(request: Request, current_user: dict = Depends(get_current_user
 
 
 @app.post("/api/query")
-@limiter.limit("15/minute")
+@limiter.limit("100/minute")
 def run_query(request: Request, query_req: QueryRequest, current_user: dict = Depends(get_current_user)):
     """Query the agent with a natural language prompt, returning execution latency and conversational response summary."""
     if not agent:

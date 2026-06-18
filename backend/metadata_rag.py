@@ -135,8 +135,14 @@ class MetadataRAG:
             "idf": idf
         }
 
+    _invalid_key_detected = False
+
     def init_embeddings(self) -> None:
         """Initializes LangChain OpenAIEmbeddings and pre-calculates table schema vector embeddings."""
+        if MetadataRAG._invalid_key_detected:
+            print("[MetadataRAG] Skipping embeddings initialization (previously detected invalid key).")
+            return
+            
         try:
             openai_key = os.environ.get("OPENAI_API_KEY")
             if openai_key and "your_openai_api_key" not in openai_key and not openai_key.startswith("sk-proj-***"):
@@ -155,6 +161,9 @@ class MetadataRAG:
             else:
                 print("[MetadataRAG] No OPENAI_API_KEY found. Defaulting to local TF-IDF Cosine similarity.")
         except Exception as e:
+            err_msg = str(e).lower()
+            if "api key" in err_msg or "api_key" in err_msg or "401" in err_msg or "unauthorized" in err_msg:
+                MetadataRAG._invalid_key_detected = True
             print(f"[MetadataRAG] Warning: Embeddings initialization failed: {e}. Defaulting to TF-IDF.")
             self.embeddings = None
             self.table_embeddings = {}
