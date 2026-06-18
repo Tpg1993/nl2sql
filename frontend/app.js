@@ -63,7 +63,7 @@ function saveChatSession(threadId, firstQuestion) {
 }
 
 function loadChatSessions() {
-    const listEl = document.getElementById("history-dropdown-list");
+    const listEl = document.getElementById("sidebar-history-list");
     if (!listEl) return;
     
     const sessions = getChatSessions();
@@ -201,6 +201,33 @@ window.addEventListener("DOMContentLoaded", () => {
     const newChatBtn = document.getElementById("new-chat-btn");
     if (newChatBtn) {
         newChatBtn.addEventListener("click", resetChatSession);
+    }
+
+    const sidebarNewChatBtn = document.getElementById("sidebar-new-chat-btn");
+    if (sidebarNewChatBtn) {
+        sidebarNewChatBtn.addEventListener("click", resetChatSession);
+    }
+
+    // Sidebar tabs toggle logic
+    const tabBtnHistory = document.getElementById("tab-btn-history");
+    const tabBtnSchema = document.getElementById("tab-btn-schema");
+    const panelHistory = document.getElementById("sidebar-history-panel");
+    const panelSchema = document.getElementById("sidebar-schema-panel");
+
+    if (tabBtnHistory && tabBtnSchema && panelHistory && panelSchema) {
+        tabBtnHistory.addEventListener("click", () => {
+            tabBtnHistory.classList.add("active");
+            tabBtnSchema.classList.remove("active");
+            panelHistory.classList.add("active");
+            panelSchema.classList.remove("active");
+        });
+
+        tabBtnSchema.addEventListener("click", () => {
+            tabBtnSchema.classList.add("active");
+            tabBtnHistory.classList.remove("active");
+            panelSchema.classList.add("active");
+            panelHistory.classList.remove("active");
+        });
     }
 
     const xSelect = document.getElementById("chart-x-select");

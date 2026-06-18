@@ -58,7 +58,7 @@
 
 
     <div class="app-container" id="app-container">
-        <!-- Sidebar for Database Schema -->
+        <!-- Sidebar for Database Schema & Chat History -->
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
@@ -75,22 +75,47 @@
                     </button>
                 </div>
             </div>
-            
-            <div class="dialect-info" id="dialect-container" style="display: none;">
-                <span class="label">Dialect:</span>
-                <span class="value" id="dialect-val">sqlite</span>
+
+            <!-- Sidebar Tab Navigation -->
+            <div class="sidebar-tabs">
+                <button class="sidebar-tab-btn active" id="tab-btn-history">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Chats
+                </button>
+                <button class="sidebar-tab-btn" id="tab-btn-schema">
+                    <i class="fa-solid fa-database"></i> Schema
+                </button>
             </div>
 
-            <nav class="schema-browser">
-                <h3>Tables & Columns</h3>
-                <div class="loading-schema" id="schema-loading">
-                    <i class="fa-solid fa-circle-notch fa-spin"></i>
-                    <span>Loading metadata...</span>
+            <!-- Chat History Panel -->
+            <div class="sidebar-tab-content active" id="sidebar-history-panel">
+                <div class="sidebar-new-chat-wrapper">
+                    <button id="sidebar-new-chat-btn" class="new-chat-action-btn">
+                        <i class="fa-solid fa-plus"></i> New Chat
+                    </button>
                 </div>
-                <ul class="table-list" id="table-list-container">
-                    <!-- Loaded dynamically via JS -->
-                </ul>
-            </nav>
+                <div class="history-list-wrapper" id="sidebar-history-list">
+                    <div class="history-item empty">No past chats</div>
+                </div>
+            </div>
+
+            <!-- Database Schema Panel -->
+            <div class="sidebar-tab-content" id="sidebar-schema-panel">
+                <div class="dialect-info" id="dialect-container" style="display: none;">
+                    <span class="label">Dialect:</span>
+                    <span class="value" id="dialect-val">sqlite</span>
+                </div>
+
+                <nav class="schema-browser">
+                    <h3>Tables & Columns</h3>
+                    <div class="loading-schema" id="schema-loading">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i>
+                        <span>Loading metadata...</span>
+                    </div>
+                    <ul class="table-list" id="table-list-container">
+                        <!-- Loaded dynamically via JS -->
+                    </ul>
+                </nav>
+            </div>
         </aside>
 
         <!-- Main Chat Area -->
@@ -119,14 +144,6 @@
                     <button id="new-chat-btn" class="theme-toggle-btn" title="New Chat Session">
                         <i class="fa-solid fa-plus"></i>
                     </button>
-                    <div class="history-dropdown-wrapper">
-                        <button id="history-toggle-btn" class="theme-toggle-btn" title="Chat History">
-                            <i class="fa-solid fa-clock-rotate-left"></i>
-                        </button>
-                        <div class="history-dropdown-content" id="history-dropdown-list">
-                            <div class="history-item empty">No past chats</div>
-                        </div>
-                    </div>
                     <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
                         <i class="fa-solid fa-sun"></i>
                     </button>
