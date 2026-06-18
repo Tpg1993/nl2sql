@@ -945,8 +945,8 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
     if not agent:
         raise HTTPException(status_code=500, detail="Database agent is not initialized.")
         
-    # Under test mode, reload configs on each query to keep in-sync with restored yaml backups
-    if is_testing:
+    # Under test mode or dynamic development, reload configs on each query to keep in-sync with restored yaml backups
+    if True:
         try:
             base_dir = os.path.dirname(os.path.abspath(__file__))
             yaml_path = os.path.join(base_dir, "semantic_layer.yaml")

@@ -392,7 +392,11 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
         tableHtml = `<div class="empty-results">No records found or empty query output.</div>`;
     } else if (typeof queryResult === "string") {
         // It's a raw string
-        tableHtml = `<div class="empty-results">${queryResult}</div>`;
+        if (queryResult.includes("Cost violation") || queryResult.includes("Security violation")) {
+            tableHtml = `<div class="error-bubble"><i class="fa-solid fa-triangle-exclamation"></i> <span>${queryResult}</span></div>`;
+        } else {
+            tableHtml = `<div class="empty-results">${queryResult}</div>`;
+        }
     } else if (Array.isArray(queryResult)) {
         // List of tuples/lists or flat lists
         tableHtml = `<table class="result-table"><thead><tr>`;
