@@ -325,7 +325,9 @@ class EHRQueryAgent:
         user_question = state["messages"][0].content
         
         # 1. Pre-execution expert override check (RLHF)
-        override_sql = self.override_store.get_override(user_question)
+        user_context = state.get("user_context") or {}
+        username = user_context.get("username")
+        override_sql = self.override_store.get_override(user_question, username=username)
         if override_sql:
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
             latencies = state.get("latencies", {}).copy()

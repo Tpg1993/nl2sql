@@ -35,6 +35,15 @@ DEMO_USERS = {
     }
 }
 
+# Add alias for custom administrator username if configured in environment
+admin_env_username = os.environ.get("ADMIN_USERNAME")
+if admin_env_username and admin_env_username != "admin":
+    DEMO_USERS[admin_env_username] = {
+        "password_hash": get_password_hash(os.environ.get("ADMIN_PASSWORD", "admin123")),
+        "role": "admin",
+        "attributes": {}
+    }
+
 def get_select_columns(sql: str) -> list:
     """Helper to parse raw select columns from an SQL query."""
     if not sql:
@@ -336,6 +345,7 @@ class LoginRequest(BaseModel):
 class OverrideRequest(BaseModel):
     question: str
     corrected_sql: str
+    username: str | None = None
 
 
 
@@ -391,7 +401,7 @@ def add_expert_override(req: OverrideRequest, current_user: dict = Depends(get_c
         raise HTTPException(status_code=400, detail="Question and corrected SQL cannot be empty.")
     
     try:
-        agent.override_store.set_override(req.question, req.corrected_sql)
+        agent.override_store.set_override(req.question, req.corrected_sql, username=req.username)
         if cache_manager:
             import hashlib
             q_hash = hashlib.sha256(req.question.lower().strip().encode("utf-8")).hexdigest()
