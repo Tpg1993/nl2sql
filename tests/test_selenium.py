@@ -16,6 +16,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(dotenv_path=os.path.join(BASE_DIR, "..", "backend", ".env"))
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+DOCTOR_PASSWORD = os.environ.get("DOCTOR_PASSWORD", "doctor123")
+RESEARCHER_PASSWORD = os.environ.get("RESEARCHER_PASSWORD", "researcher123")
+
 
 class TestEHRQueryAgentSelenium(unittest.TestCase):
     backend_process = None
@@ -587,7 +590,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
 
     def test_09_compliance_pii_masking_researcher(self):
         self.log("[Test 09] Testing HIPAA compliance and PII masking for Researcher role...")
-        self.login("researcher", "researcher123")
+        self.login("researcher", RESEARCHER_PASSWORD)
         
         WebDriverWait(self.driver, 10).until(
             EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
@@ -627,7 +630,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         driver = self.driver
         
         # 1. Log in as researcher first and verify Settings button is NOT displayed
-        self.login("researcher", "researcher123")
+        self.login("researcher", RESEARCHER_PASSWORD)
         WebDriverWait(driver, 10).until(
             EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
         )
@@ -1074,7 +1077,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         driver = self.driver
         
         # 1. Log in as researcher (role not bypassed by default)
-        self.login("researcher", "researcher123")
+        self.login("researcher", RESEARCHER_PASSWORD)
         
         # Wait for connected
         WebDriverWait(driver, 10).until(
@@ -1139,7 +1142,7 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self.logout()
         
         # 3. Log in as doctor (now bypassed)
-        self.login("doctor", "doctor123")
+        self.login("doctor", DOCTOR_PASSWORD)
         
         WebDriverWait(driver, 10).until(
             EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")

@@ -1,9 +1,11 @@
 import os
 import sys
 import unittest
+from dotenv import load_dotenv
 
 # Add parent directory to path so backend can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "backend", ".env"))
 
 from backend.agent import EHRQueryAgent
 from backend.app import apply_policy_masking, DEMO_USERS
@@ -47,12 +49,14 @@ class TestComplianceGuardrails(unittest.TestCase):
         self.assertEqual(DEMO_USERS["admin"]["role"], "admin")
 
         # Test Doctor
-        self.assertTrue(verify_password("doctor123", DEMO_USERS["doctor"]["password_hash"]))
+        doctor_pwd = os.environ.get("DOCTOR_PASSWORD", "doctor123")
+        self.assertTrue(verify_password(doctor_pwd, DEMO_USERS["doctor"]["password_hash"]))
         self.assertEqual(DEMO_USERS["doctor"]["role"], "doctor")
         self.assertEqual(DEMO_USERS["doctor"]["attributes"].get("department_id"), 1)
 
         # Test Researcher
-        self.assertTrue(verify_password("researcher123", DEMO_USERS["researcher"]["password_hash"]))
+        researcher_pwd = os.environ.get("RESEARCHER_PASSWORD", "researcher123")
+        self.assertTrue(verify_password(researcher_pwd, DEMO_USERS["researcher"]["password_hash"]))
         self.assertEqual(DEMO_USERS["researcher"]["role"], "researcher")
 
     def test_dynamic_masking_admin(self):

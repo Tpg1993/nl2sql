@@ -24,12 +24,12 @@ DEMO_USERS = {
         "attributes": {}
     },
     "doctor": {
-        "password_hash": get_password_hash("doctor123"),
+        "password_hash": get_password_hash(os.environ.get("DOCTOR_PASSWORD", "doctor123")),
         "role": "doctor",
         "attributes": {"department_id": 1}
     },
     "researcher": {
-        "password_hash": get_password_hash("researcher123"),
+        "password_hash": get_password_hash(os.environ.get("RESEARCHER_PASSWORD", "researcher123")),
         "role": "researcher",
         "attributes": {}
     }
