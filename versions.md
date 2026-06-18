@@ -4,14 +4,14 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
-## [v23_conversational_memory](#v23_conversational_memory) (Current Active Branch)
-*   **Release Focus**: Multi-Turn Conversational Memory & Token/Cost optimization.
-*   **Conversational Checkpointing**: Integrates LangGraph checkpointer memory via `MemorySaver` to persist multi-turn conversational context on a per-thread basis.
-*   **Token Optimization (Result Stripping & Sliding Window)**: Limits chat history injection to a sliding window of the last 3 turns, completely stripping out raw database result row arrays/dicts and DDL schemas from past turns to prevent token bloat and optimize prompt sizes by up to 90%.
-*   **Visual Reset control**: Introduces a visual "New Chat" header button that resets conversation logs and updates the local storage `thread_id` to initialize isolated threads.
-*   **Verification**: Verified via dedicated E2E unit tests ([test_conversational_memory.py](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/tests/test_conversational_memory.py)) asserting thread isolation, sliding window turn limits, and data result stripping.
+## [v24_chat_history_navigation](#v24_chat_history_navigation) (Current Active Branch)
+*   **Release Focus**: Collapsible Left Sidebar Chat History & Tabbed Navigation.
+*   **Tabbed Sidebar Layout**: Replaces the header clock icon hover dropdown with a unified left sidebar containing two tabs: "Chats" (with a "New Chat" button and a session card list) and "Schema" (the database tables/columns browser).
+*   **Rounded Card UI**: Redesigns chat session history items into rounded cards with active selection glow borders, timestamp labels, and ID tags.
+*   **Test Suite Optimization**: Updates the E2E Selenium integration test suite (`test_selenium.py`) to navigate the sidebar tabs, and replaces presence checks with visibility checks to eliminate rendering race conditions.
+*   **Verification**: 100% successful execution verified across all 72 pytest cases (54 unit tests and 18 E2E Selenium tests).
 
-## [v22_federated_query_caching](#v22_federated_query_caching)
+## [v23_conversational_memory](#v23_conversational_memory)
 *   **Release Focus**: Federated Query Sub-Query Caching to reduce execution costs and network latency.
 *   **Sub-Query Caching**: Caches decomposed query results for remote databases (like Snowflake or Databricks SQL Warehouses) using SQL statement hash keys.
 *   **Dual SQLite/Redis Backend**: Supports both local SQLite (`sql_cache` table) and distributed Redis (`nl2sql:sql_cache:*` namespace) cache stores.
