@@ -17,6 +17,29 @@ const sendButton = document.getElementById("send-button");
 window.addEventListener("DOMContentLoaded", () => {
     initSidebarCollapse();
     initLogout();
+
+    const xSelect = document.getElementById("chart-x-select");
+    const ySelect = document.getElementById("chart-y-select");
+    const typeSelect = document.getElementById("chart-type-select");
+    const downloadBtn = document.getElementById("download-chart-btn");
+    
+    if (xSelect) xSelect.addEventListener("change", renderQueryChart);
+    if (ySelect) ySelect.addEventListener("change", renderQueryChart);
+    if (typeSelect) typeSelect.addEventListener("change", renderQueryChart);
+    
+    if (downloadBtn) {
+        downloadBtn.addEventListener("click", () => {
+            const canvas = document.getElementById("query-chart-canvas");
+            if (canvas) {
+                const link = document.createElement("a");
+                link.download = "query-chart.png";
+                link.href = canvas.toDataURL("image/png");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        });
+    }
     
     const token = localStorage.getItem("access_token");
     if (!token) {
@@ -496,6 +519,11 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                         : ''
                     }
                     ${cached ? `<span class="meta-item cache-badge"><i class="fa-solid fa-cloud-bolt"></i> Served from Cache</span>` : ''}
+                    ${isChartable(queryResult) ? `
+                    <button class="visualize-results-btn" onclick="openChartModal(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(queryResult))}')), '${encodeURIComponent(questionText)}')">
+                        <i class="fa-solid fa-chart-line"></i> Visualize Results
+                    </button>
+                    ` : ''}
                 </div>
 
                 <!-- Query Lineage Tree details -->
@@ -657,22 +685,22 @@ function appendAssistantResponse(sqlQuery, queryResult, tokens, cached = false, 
                                 ${retrievedTables && retrievedTables.length > 0 ? `
                                 <div class="meta-detail-item" style="grid-column: span 2;">
                                     <span class="detail-label">RAG Schema Tables</span>
-                                    <span class="detail-value" style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;">
-                                        ${retrievedTables.map(t => `<span class="rag-table-badge" style="background: rgba(167, 139, 250, 0.15); color: #c084fc; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(167, 139, 250, 0.3); font-size: 0.75rem; font-family: monospace; font-weight: 600;"><i class="fa-solid fa-table" style="margin-right: 4px; font-size: 0.7rem;"></i>${t}</span>`).join('')}
+                                    <span class="rag-tables-wrapper">
+                                        ${retrievedTables.map(t => `<span class="rag-table-badge"><i class="fa-solid fa-table"></i>${t}</span>`).join('')}
                                     </span>
                                 </div>
                                 ` : ''}
                                 ${retrievedFewShots && retrievedFewShots.length > 0 ? `
-                                <div class="meta-detail-item" style="grid-column: span 2; margin-top: 8px; border-top: 1px dashed rgba(255, 255, 255, 0.1); padding-top: 10px;">
-                                    <span class="detail-label" style="display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-lightbulb" style="color: #f59e0b; font-size: 0.85rem;"></i> Retrieved Few-Shot Examples (RAG similarity match)</span>
-                                    <div class="few-shot-examples-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+                                <div class="meta-detail-item few-shot-examples-container" style="grid-column: span 2;">
+                                    <span class="detail-label"><i class="fa-solid fa-lightbulb"></i> Retrieved Few-Shot Examples (RAG similarity match)</span>
+                                    <div class="few-shot-examples-list">
                                         ${retrievedFewShots.map(fs => `
-                                            <div class="few-shot-example-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 6px; padding: 8px 10px; font-size: 0.75rem;">
-                                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-weight: 600; color: var(--text-secondary);">
+                                            <div class="few-shot-example-card">
+                                                <div class="few-shot-header">
                                                     <span>Q: ${fs.question}</span>
-                                                    <span style="color: #34d399; font-size: 0.7rem;"><i class="fa-solid fa-gauge-simple-high"></i> Similarity: ${(fs.score * 100).toFixed(1)}%</span>
+                                                    <span class="few-shot-score"><i class="fa-solid fa-gauge-simple-high"></i> Similarity: ${(fs.score * 100).toFixed(1)}%</span>
                                                 </div>
-                                                <pre style="margin: 0; background: rgba(0, 0, 0, 0.2); padding: 4px 6px; border-radius: 4px; font-family: monospace; color: #a78bfa; overflow-x: auto; white-space: pre-wrap;"><code>${fs.sql}</code></pre>
+                                                <pre><code>${fs.sql}</code></pre>
                                             </div>
                                         `).join('')}
                                     </div>
@@ -831,6 +859,11 @@ themeToggleBtn.addEventListener("click", () => {
     document.body.setAttribute("data-theme", nextTheme);
     localStorage.setItem("theme", nextTheme);
     updateThemeIcon(nextTheme);
+    
+    // Re-render query chart if active to apply new theme text/grid colors
+    if (typeof renderQueryChart === "function" && currentChartInstance) {
+        renderQueryChart();
+    }
 });
 
 function updateThemeIcon(theme) {
@@ -2277,5 +2310,246 @@ async function loadGitInfo() {
 }
 
 window.__app_initialized = true;
+
+// =====================================================================
+// DYNAMIC QUERY CHARTING MODULE (v20)
+// =====================================================================
+let currentChartInstance = null;
+let currentChartData = null;
+
+function isChartable(data) {
+    if (!Array.isArray(data) || data.length === 0) return false;
+    const firstRow = data[0];
+    if (typeof firstRow !== 'object' || firstRow === null) return false;
+    
+    // Check if there is at least one numeric value in the keys
+    const keys = Object.keys(firstRow);
+    let hasNumeric = false;
+    keys.forEach(k => {
+        const val = firstRow[k];
+        if (typeof val === 'number' && !isNaN(val)) {
+            hasNumeric = true;
+        } else if (typeof val === 'string') {
+            const num = parseFloat(val);
+            if (!isNaN(num) && isFinite(num) && /^-?\d+(\.\d+)?$/.test(val.trim())) {
+                hasNumeric = true;
+            }
+        }
+    });
+    return hasNumeric;
+}
+
+function openChartModal(data, encodedQuestion) {
+    const question = decodeURIComponent(encodedQuestion);
+    currentChartData = data;
+    
+    const overlay = document.getElementById("chart-overlay");
+    overlay.style.display = "flex";
+    
+    const firstRow = data[0];
+    const keys = Object.keys(firstRow);
+    
+    const xSelect = document.getElementById("chart-x-select");
+    const ySelect = document.getElementById("chart-y-select");
+    const typeSelect = document.getElementById("chart-type-select");
+    
+    xSelect.innerHTML = "";
+    ySelect.innerHTML = "";
+    
+    keys.forEach(k => {
+        // Populate X-Axis options
+        const xOpt = document.createElement("option");
+        xOpt.value = k;
+        xOpt.textContent = k;
+        xSelect.appendChild(xOpt);
+        
+        // Populate Y-Axis options (only numeric/parseable keys)
+        let isNum = false;
+        const testVal = firstRow[k];
+        if (typeof testVal === 'number' && !isNaN(testVal)) {
+            isNum = true;
+        } else if (typeof testVal === 'string') {
+            const num = parseFloat(testVal);
+            if (!isNaN(num) && isFinite(num) && /^-?\d+(\.\d+)?$/.test(testVal.trim())) {
+                isNum = true;
+            }
+        }
+        
+        if (isNum) {
+            const yOpt = document.createElement("option");
+            yOpt.value = k;
+            yOpt.textContent = k;
+            ySelect.appendChild(yOpt);
+        }
+    });
+    
+    // Auto-select a numeric field for Y-Axis and a non-numeric for X-Axis if possible
+    if (xSelect.options.length > 1 && ySelect.options.length > 0) {
+        // Find first key that is NOT numeric to be X-Axis
+        for (let i = 0; i < keys.length; i++) {
+            const k = keys[i];
+            if (k !== ySelect.value) {
+                xSelect.value = k;
+                break;
+            }
+        }
+    }
+    
+    // Render chart
+    renderQueryChart();
+}
+
+function closeChartModal() {
+    document.getElementById("chart-overlay").style.display = "none";
+    if (currentChartInstance) {
+        currentChartInstance.destroy();
+        currentChartInstance = null;
+    }
+    currentChartData = null;
+}
+
+// Attach close event to button and selects on load
+document.addEventListener("DOMContentLoaded", () => {
+    const closeBtn = document.getElementById("close-chart-btn");
+    const overlay = document.getElementById("chart-overlay");
+    
+    if (closeBtn) {
+        closeBtn.addEventListener("click", closeChartModal);
+    }
+    
+    // Close modal on overlay click
+    if (overlay) {
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) closeChartModal();
+        });
+    }
+    
+    const xSelect = document.getElementById("chart-x-select");
+    const ySelect = document.getElementById("chart-y-select");
+    const typeSelect = document.getElementById("chart-type-select");
+    
+    if (xSelect) xSelect.addEventListener("change", renderQueryChart);
+    if (ySelect) ySelect.addEventListener("change", renderQueryChart);
+    if (typeSelect) typeSelect.addEventListener("change", renderQueryChart);
+});
+
+function renderQueryChart() {
+    if (!currentChartData) return;
+    
+    const canvas = document.getElementById("query-chart-canvas");
+    if (!canvas) return;
+    
+    const xKey = document.getElementById("chart-x-select").value;
+    const yKey = document.getElementById("chart-y-select").value;
+    const type = document.getElementById("chart-type-select").value;
+    
+    if (!xKey || !yKey) return;
+    
+    // Destroy existing instance to prevent overlapping rendering bugs
+    if (currentChartInstance) {
+        currentChartInstance.destroy();
+    }
+    
+    // Limit data to prevent clutter (max 25 rows)
+    const displayData = currentChartData.slice(0, 25);
+    
+    const labels = displayData.map(row => String(row[xKey] === null || row[xKey] === undefined ? 'NULL' : row[xKey]));
+    const values = displayData.map(row => {
+        const val = row[yKey];
+        if (typeof val === 'number') return val;
+        const num = parseFloat(val);
+        return isNaN(num) ? 0 : num;
+    });
+    
+    const theme = document.body.getAttribute("data-theme") || "dark";
+    const isDark = theme === "dark";
+    
+    const textColor = isDark ? "#cbd5e1" : "#334155";
+    const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.08)";
+    
+    // Generate beautiful curated dynamic color schemes based on index
+    const barBackgrounds = values.map((_, i) => {
+        const hue = (260 + i * 25) % 360; // Start at purple (260) and rotate hue
+        return `hsla(${hue}, 75%, 65%, 0.7)`;
+    });
+    const barBorders = values.map((_, i) => {
+        const hue = (260 + i * 25) % 360;
+        return `hsla(${hue}, 75%, 60%, 1)`;
+    });
+    
+    const chartConfig = {
+        type: type,
+        data: {
+            labels: labels,
+            datasets: [{
+                label: yKey,
+                data: values,
+                backgroundColor: type === 'line' ? 'rgba(123, 44, 191, 0.2)' : barBackgrounds,
+                borderColor: type === 'line' ? '#7b2cbf' : barBorders,
+                borderWidth: type === 'line' ? 3 : 1.5,
+                fill: type === 'line',
+                tension: type === 'line' ? 0.3 : 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: type === 'pie' || type === 'doughnut',
+                    labels: {
+                        color: textColor,
+                        font: {
+                            family: 'Outfit, sans-serif',
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                    titleColor: isDark ? '#ffffff' : '#0f172a',
+                    bodyColor: isDark ? '#cbd5e1' : '#334155',
+                    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)',
+                    borderWidth: 1,
+                    titleFont: { family: 'Outfit, sans-serif', weight: '600' },
+                    bodyFont: { family: 'Outfit, sans-serif' }
+                }
+            },
+            scales: {}
+        }
+    };
+    
+    // Add scales configurations only for non-radial charts
+    if (type !== 'pie' && type !== 'doughnut') {
+        chartConfig.options.scales = {
+            x: {
+                grid: {
+                    color: gridColor
+                },
+                ticks: {
+                    color: textColor,
+                    font: {
+                        family: 'Outfit, sans-serif',
+                        size: 10
+                    }
+                }
+            },
+            y: {
+                grid: {
+                    color: gridColor
+                },
+                ticks: {
+                    color: textColor,
+                    font: {
+                        family: 'Outfit, sans-serif',
+                        size: 10
+                    }
+                }
+            }
+        };
+    }
+    
+    currentChartInstance = new Chart(canvas, chartConfig);
+}
 
 

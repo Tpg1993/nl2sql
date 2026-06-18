@@ -2148,3 +2148,301 @@ body[data-theme="light"] .override-username-select option {
     background-color: #ffffff; /* Light Mode dropdown background */
     color: #0f172a;            /* Light Mode dropdown text */
 }
+
+/* =====================================================================
+   DYNAMIC QUERY CHARTING MODAL STYLING (v20)
+   ===================================================================== */
+.chart-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(5, 7, 15, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease;
+}
+
+.chart-card {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    border-radius: 20px;
+    width: 90%;
+    max-width: 800px;
+    padding: 24px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    animation: slideUp 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.chart-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-glass);
+    padding-bottom: 12px;
+}
+
+.chart-card-header h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.close-chart-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 2rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    padding: 0;
+}
+
+.close-chart-btn:hover {
+    color: var(--error);
+}
+
+.chart-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.chart-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.chart-control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.chart-control-group label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chart-control-group label i {
+    color: var(--accent-secondary);
+}
+
+.chart-select {
+    width: 100%;
+}
+
+.chart-canvas-container {
+    position: relative;
+    width: 100%;
+    height: 380px;
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Visualize Results Button in Chat */
+.visualize-results-btn {
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #38bdf8;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition-smooth);
+}
+
+.visualize-results-btn:hover {
+    background: rgba(56, 189, 248, 0.2);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.2);
+}
+
+/* Light mode styling overrides */
+body[data-theme="light"] .chart-modal-overlay {
+    background-color: rgba(241, 245, 249, 0.8);
+}
+
+body[data-theme="light"] .chart-card {
+    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(15, 23, 42, 0.1);
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
+}
+
+body[data-theme="light"] .chart-controls {
+    background: rgba(15, 23, 42, 0.02);
+    border-color: rgba(15, 23, 42, 0.08);
+}
+
+body[data-theme="light"] .chart-canvas-container {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.08);
+}
+
+body[data-theme="light"] .visualize-results-btn {
+    background: rgba(2, 132, 199, 0.08);
+    border-color: rgba(2, 132, 199, 0.2);
+    color: #0284c7;
+}
+
+body[data-theme="light"] .visualize-results-btn:hover {
+    background: rgba(2, 132, 199, 0.15);
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.1);
+}
+
+/* =====================================================================
+   RAG FEW-SHOT & SCHEMA TABLE BADGES STYLING (v20 contrast fix)
+   ===================================================================== */
+.few-shot-examples-container {
+    margin-top: 8px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.1);
+    padding-top: 10px;
+}
+
+.few-shot-example-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.75rem;
+}
+
+.few-shot-example-card pre {
+    margin: 0;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-family: 'Fira Code', monospace;
+    color: #c084fc;
+    overflow-x: auto;
+    white-space: pre-wrap;
+}
+
+.rag-table-badge {
+    background: rgba(167, 139, 250, 0.15);
+    color: #c084fc;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    font-size: 0.75rem;
+    font-family: 'Fira Code', monospace;
+    font-weight: 600;
+}
+
+/* Light mode overrides for high-contrast accessibility */
+body[data-theme="light"] select option {
+    background-color: #ffffff;
+    color: #0f172a;
+}
+
+body[data-theme="light"] .few-shot-examples-container {
+    border-top-color: rgba(15, 23, 42, 0.08);
+}
+
+body[data-theme="light"] .few-shot-example-card {
+    background: rgba(15, 23, 42, 0.02);
+    border-color: rgba(15, 23, 42, 0.06);
+}
+
+body[data-theme="light"] .few-shot-example-card pre {
+    background: rgba(15, 23, 42, 0.05);
+    color: #6d28d9; /* High contrast dark purple */
+}
+
+body[data-theme="light"] .rag-table-badge {
+    background: rgba(124, 58, 237, 0.08);
+    color: #6d28d9;
+    border-color: rgba(124, 58, 237, 0.2);
+}
+
+.rag-tables-wrapper {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.few-shot-examples-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.few-shot-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.few-shot-score {
+    color: #34d399;
+    font-size: 0.7rem;
+}
+
+#download-chart-btn {
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #38bdf8;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition-smooth);
+}
+
+#download-chart-btn:hover {
+    background: rgba(56, 189, 248, 0.2);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.2);
+}
+
+body[data-theme="light"] #download-chart-btn {
+    background: rgba(2, 132, 199, 0.08);
+    border-color: rgba(2, 132, 199, 0.2);
+    color: #0284c7;
+}
+
+body[data-theme="light"] #download-chart-btn:hover {
+    background: rgba(2, 132, 199, 0.15);
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.1);
+}
+

@@ -4,10 +4,16 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
-## [v20_sarvam_federated_query_router](#v20_sarvam_federated_query_router) (Planned Branch)
+## [v21_sarvam_federated_query_router](#v21_sarvam_federated_query_router) (Planned Branch)
 *   **Release Focus**: Federated Query Virtualization across multiple SQLite/Cloud Databricks databases.
 
-## [v19_sarvam_gitops_pr_sync](#v19_sarvam_gitops_pr_sync) (Current Active Branch)
+## [v20_visual_charting](#v20_visual_charting) (Current Active Branch)
+*   **Release Focus**: Dynamic Visual Charting & Graphing modal with customizable axis selector controls.
+*   **Interactive Modal Integration**: Adds client-side Chart.js query result visualization (Bar, Line, Pie, and Doughnut charts) inside the dashboard, with automatically matching light/dark styling.
+*   **Dynamic Data Scans**: Evaluates dataset numeric columns on the fly and presents a "Visualize Results" option to launch the interactive canvas dialog.
+*   **Verification & Screenshots**: Incorporates automated Python unit tests validating datasets, and Selenium integration scenario (`test_18`) capturing E2E visual screenshots.
+
+## [v19_sarvam_gitops_pr_sync](#v19_sarvam_gitops_pr_sync)
 *   **Release Focus**: GitOps PR sync automation directly from the Semantic Configurator console UI.
 *   **Version Control Integration**: Integrates active branch retrieval and remote git target branch mapping options. Shows alerts if GITHUB_TOKEN credentials are missing.
 *   **Automated Pull Request Sync**: Stages, commits, and pushes configurations to the remote branch, opening a new Pull Request or updating an existing one via GitHub API call.

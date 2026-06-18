@@ -207,3 +207,18 @@ These queries verify the embedding-based table schema retrieval and few-shot sel
     *   Retrieves the most semantically relevant few-shot examples (e.g. ones referencing `allergies` or `patients`).
     *   In the UI under "Token & Latency Details", the collapsible drawer displays "Retrieved Few-Shot Examples (RAG similarity match)" listing the matched questions (e.g., those referencing allergies) with their similarity score.
 *   **Why it tests**: Confirms E2E visualization of semantic few-shot RAG matching and layout correctness.
+
+---
+
+## 7. Visual Charting & Dynamic Graphing
+
+These queries verify the client-side interactive visualization engine.
+
+### Test Case 7.1: Active Allergies Severity Charting
+*   **Question**: `What is the count of active allergies grouped by severity?`
+*   **Expected Behavior**:
+    *   The backend retrieves the count of active allergies grouped by severity.
+    *   Since the dataset contains numeric columns (`allergy_count`), the UI displays a `"Visualize Results"` button in the metadata panel.
+    *   Clicking the button opens the **Dynamic Query Visualization** modal.
+    *   The modal contains an interactive Chart.js canvas showing a Bar Chart of severity counts, with options to toggle chart types (Bar, Line, Pie, Doughnut) and customize X/Y axes.
+*   **Why it tests**: Validates dynamic scanning for chartable result tables, modal activation, dropdown selector population, and Chart.js canvas rendering.

@@ -1318,5 +1318,82 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
+    def test_18_query_result_visual_charting(self):
+        self.log("[Test 18] Testing dynamic visual charting modal and axis select mapping controls...")
+        driver = self.driver
+        self.login("admin", ADMIN_PASSWORD)
+        
+        # Wait for connected
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # Submit query that yields numeric results (active allergies by severity)
+        input_box = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "user-input"))
+        )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
+        
+        query = "What is the count of active allergies grouped by severity?"
+        self.driver.execute_script(f"arguments[0].value = {repr(query)}; arguments[0].dispatchEvent(new Event('input'));", input_box)
+        time.sleep(0.5)
+        
+        send_btn = driver.find_element(By.ID, "send-button")
+        self.driver.execute_script("arguments[0].click();", send_btn)
+        
+        # Wait for results to compile and display
+        time.sleep(8)
+        
+        # Verify result table is rendered
+        result_table = WebDriverWait(driver, 45).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "result-table"))
+        )
+        self.assertTrue(result_table.is_displayed())
+        
+        # Verify "Visualize Results" button is visible inside query-meta-bar
+        visualize_btn = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CLASS_NAME, "visualize-results-btn"))
+        )
+        self.assertTrue(visualize_btn.is_displayed())
+        
+        # Click the Visualize button to open the Chart Modal
+        visualize_btn.click()
+        time.sleep(1.5)
+        
+        # Verify chart overlay is displayed
+        chart_overlay = driver.find_element(By.ID, "chart-overlay")
+        self.assertTrue(chart_overlay.is_displayed(), "Chart modal overlay should be visible.")
+        
+        # Check if select controls are loaded and populated
+        chart_type_select = driver.find_element(By.ID, "chart-type-select")
+        chart_x_select = driver.find_element(By.ID, "chart-x-select")
+        chart_y_select = driver.find_element(By.ID, "chart-y-select")
+        
+        self.assertGreater(len(chart_type_select.find_elements(By.TAG_NAME, "option")), 0)
+        self.assertGreater(len(chart_x_select.find_elements(By.TAG_NAME, "option")), 0)
+        self.assertGreater(len(chart_y_select.find_elements(By.TAG_NAME, "option")), 0)
+        self.log("-> Select dropdown options loaded and axis values populated successfully.")
+        
+        # Capture a screenshot of the visual charting modal
+        try:
+            screenshots_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots"))
+            os.makedirs(screenshots_dir, exist_ok=True)
+            screenshot_path = os.path.join(screenshots_dir, "17_Visual_Charting_Modal.png")
+            driver.save_screenshot(screenshot_path)
+            self.log(f"-> Captured Visual Charting modal screenshot: {screenshot_path}")
+        except Exception as e:
+            self.log(f"-> Failed to capture charting screenshot: {e}")
+            
+        # Close the chart modal
+        close_btn = driver.find_element(By.ID, "close-chart-btn")
+        close_btn.click()
+        time.sleep(1)
+        self.assertFalse(chart_overlay.is_displayed(), "Chart overlay should be hidden after closing.")
+        self.log("-> SUCCESS: Dynamic visual charting modal verified and dismissed.")
+        
+        self._test_has_failed = False
+        self.logout()
+
 if __name__ == "__main__":
     unittest.main()

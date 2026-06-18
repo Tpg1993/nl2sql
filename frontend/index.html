@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- CSS Style Sheets -->
     <link rel="stylesheet" href="style.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <!-- Login Modal Overlay -->
@@ -348,6 +350,45 @@
                     <button class="save-settings-btn" id="save-settings-btn">
                         <i class="fa-solid fa-floppy-disk"></i> Save & Hot-Reload
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dynamic Query Charting Modal -->
+    <div class="chart-modal-overlay" id="chart-overlay" style="display: none;">
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <h3><i class="fa-solid fa-chart-pie" style="color: var(--accent-secondary); margin-right: 8px;"></i>Dynamic Query Visualization</h3>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <button id="download-chart-btn" title="Download Chart as PNG">
+                        <i class="fa-solid fa-download"></i> Download PNG
+                    </button>
+                    <button id="close-chart-btn" class="close-chart-btn" style="margin-left: 8px;">&times;</button>
+                </div>
+            </div>
+            <div class="chart-card-body">
+                <div class="chart-controls">
+                    <div class="chart-control-group">
+                        <label><i class="fa-solid fa-gears"></i> Chart Type</label>
+                        <select id="chart-type-select" class="form-select chart-select">
+                            <option value="bar">Bar Chart</option>
+                            <option value="line">Line Chart</option>
+                            <option value="pie">Pie Chart</option>
+                            <option value="doughnut">Doughnut Chart</option>
+                        </select>
+                    </div>
+                    <div class="chart-control-group">
+                        <label><i class="fa-solid fa-arrow-right-long"></i> X-Axis (Labels)</label>
+                        <select id="chart-x-select" class="form-select chart-select"></select>
+                    </div>
+                    <div class="chart-control-group">
+                        <label><i class="fa-solid fa-arrow-up-long"></i> Y-Axis (Values)</label>
+                        <select id="chart-y-select" class="form-select chart-select"></select>
+                    </div>
+                </div>
+                <div class="chart-canvas-container">
+                    <canvas id="query-chart-canvas"></canvas>
                 </div>
             </div>
         </div>
