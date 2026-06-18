@@ -19,6 +19,16 @@ class BaseCacheManager(ABC):
         pass
 
     @abstractmethod
+    def get_sql(self, sql: str) -> list | None:
+        """Retrieve cached SQL execution results if they exist and are not expired."""
+        pass
+
+    @abstractmethod
+    def set_sql(self, sql: str, result: list) -> None:
+        """Store SQL execution results in the cache."""
+        pass
+
+    @abstractmethod
     def delete(self, key_hash: str) -> None:
         """Remove a specific cache entry by its key hash."""
         pass
@@ -54,6 +64,14 @@ class SQLiteCacheManager(BaseCacheManager):
                     result TEXT,
                     summary TEXT,
                     tokens TEXT,
+                    created_at REAL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS sql_cache (
+                    key_hash TEXT PRIMARY KEY,
+                    query TEXT,
+                    result TEXT,
                     created_at REAL
                 )
             """)
@@ -121,6 +139,56 @@ class SQLiteCacheManager(BaseCacheManager):
         except Exception as e:
             print(f"Error writing to SQLite cache: {e}")
 
+    def get_sql(self, sql: str) -> list | None:
+        """Gets cached database results for a physical SQL query if they exist and are not expired."""
+        if self.ttl <= 0:
+            return None
+
+        key_hash = hashlib.sha256(sql.lower().strip().encode("utf-8")).hexdigest()
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT result, created_at FROM sql_cache WHERE key_hash = ?",
+                    (key_hash,)
+                )
+                row = cursor.fetchone()
+                if row:
+                    result_json, created_at = row
+                    age = time.time() - created_at
+                    if age <= self.ttl:
+                        print(f"\n[Federated Cache Hit] Serving remote sub-query result from SQLite cache (age: {int(age)}s)")
+                        return json.loads(result_json) if result_json else []
+                    else:
+                        print(f"\n[Federated Cache Expired] SQL cache row expired (age: {int(age)}s). Purging...")
+                        conn.execute("DELETE FROM sql_cache WHERE key_hash = ?", (key_hash,))
+                        conn.commit()
+        except Exception as e:
+            print(f"Error reading SQL cache: {e}")
+        return None
+
+    def set_sql(self, sql: str, result: list) -> None:
+        """Stores physical SQL query results in the cache."""
+        if self.ttl <= 0:
+            return
+
+        key_hash = hashlib.sha256(sql.lower().strip().encode("utf-8")).hexdigest()
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO sql_cache (key_hash, query, result, created_at) VALUES (?, ?, ?, ?)",
+                    (
+                        key_hash,
+                        sql.strip(),
+                        json.dumps(result),
+                        time.time()
+                    )
+                )
+                conn.commit()
+                print(f"[Federated Cache Store] Persisted sub-query result to SQLite cache (key: {key_hash[:10]}...)")
+        except Exception as e:
+            print(f"Error writing SQL cache: {e}")
+
     def delete(self, key_hash: str) -> None:
         """Removes a specific cache row by hash key."""
         try:
@@ -131,10 +199,11 @@ class SQLiteCacheManager(BaseCacheManager):
             print(f"Error deleting cache row: {e}")
 
     def clear(self) -> None:
-        """Clears all cached queries from the SQLite cache table."""
+        """Clears all cached queries from the SQLite cache tables."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("DELETE FROM query_cache")
+                conn.execute("DELETE FROM sql_cache")
                 conn.commit()
                 print("[Cache Clear] SQLite cache cleared.")
         except Exception as e:
@@ -204,6 +273,42 @@ class RedisCacheManager(BaseCacheManager):
         except Exception as e:
             print(f"Error writing to Redis cache: {e}")
 
+    def _get_sql_key(self, sql: str) -> str:
+        """Generates a unique Redis key using SHA256 hash of the normalized SQL query."""
+        key_hash = hashlib.sha256(sql.lower().strip().encode("utf-8")).hexdigest()
+        return f"nl2sql:sql_cache:{key_hash}"
+
+    def get_sql(self, sql: str) -> list | None:
+        """Retrieve cached SQL query results from Redis."""
+        if self.ttl <= 0:
+            return None
+
+        key = self._get_sql_key(sql)
+        try:
+            cached_data = self.client.get(key)
+            if cached_data:
+                print("\n[Federated Cache Hit] Serving remote sub-query result from Redis cache")
+                return json.loads(cached_data)
+        except Exception as e:
+            print(f"Error reading SQL cache from Redis: {e}")
+        return None
+
+    def set_sql(self, sql: str, result: list) -> None:
+        """Store SQL query results in Redis cache with TTL."""
+        if self.ttl <= 0:
+            return
+
+        key = self._get_sql_key(sql)
+        try:
+            self.client.setex(
+                name=key,
+                time=self.ttl,
+                value=json.dumps(result)
+            )
+            print(f"[Federated Cache Store] Persisted sub-query result to Redis cache (key: {key})")
+        except Exception as e:
+            print(f"Error writing SQL cache to Redis: {e}")
+
     def delete(self, key_hash: str) -> None:
         """Removes a specific cache key using its raw hash."""
         key = f"nl2sql:cache:{key_hash}"
@@ -216,9 +321,11 @@ class RedisCacheManager(BaseCacheManager):
         """Clears all cached queries from Redis matching the namespace."""
         try:
             keys = self.client.keys("nl2sql:cache:*")
-            if keys:
-                self.client.delete(*keys)
-                print(f"[Cache Clear] Cleared {len(keys)} keys from Redis.")
+            sql_keys = self.client.keys("nl2sql:sql_cache:*")
+            all_keys = keys + sql_keys
+            if all_keys:
+                self.client.delete(*all_keys)
+                print(f"[Cache Clear] Cleared {len(all_keys)} keys from Redis.")
         except Exception as e:
             print(f"Error clearing Redis cache: {e}")
 

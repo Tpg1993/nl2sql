@@ -4,7 +4,13 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
-## [v21_sarvam_federated_query_router](#v21_sarvam_federated_query_router) (Current Active Branch)
+## [v22_federated_query_caching](#v22_federated_query_caching) (Current Active Branch)
+*   **Release Focus**: Federated Query Sub-Query Caching to reduce execution costs and network latency.
+*   **Sub-Query Caching**: Caches decomposed query results for remote databases (like Snowflake or Databricks SQL Warehouses) using SQL statement hash keys.
+*   **Dual SQLite/Redis Backend**: Supports both local SQLite (`sql_cache` table) and distributed Redis (`nl2sql:sql_cache:*` namespace) cache stores.
+*   **Verification**: Verified via dedicated E2E unit tests ([test_federated_cache.py](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/tests/test_federated_cache.py)) asserting cache stores, hit validation, TTL expiration, and remote warehouse call bypasses.
+
+## [v21_sarvam_federated_query_router](#v21_sarvam_federated_query_router)
 *   **Release Focus**: Federated Query Virtualization across multiple SQLite/Cloud Databricks databases.
 *   **Federated Join Engine**: Dynamically routes and decomposes queries involving local tables (e.g. `patients` in `db_local_ehr`) and remote tables (e.g. `encounters` in `db_remote_warehouse`), joining outcomes in-memory.
 *   **Semi-Join Pushdown**: Optimizes remote scans by dynamically injecting candidate keys as an `IN` constraint to avoid loading massive database tables.

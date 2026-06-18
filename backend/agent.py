@@ -85,7 +85,8 @@ class EHRQueryAgent:
     summarizes the output into a plain English conversational response.
     """
 
-    def __init__(self, db_uri: str = None) -> None:
+    def __init__(self, db_uri: str = None, cache_manager: Any = None) -> None:
+        self.cache_manager = cache_manager
         # Resolve DB path dynamically if not provided
         if db_uri is None:
             databricks_host = os.environ.get("DATABRICKS_HOST")
@@ -958,18 +959,30 @@ class EHRQueryAgent:
                 print(f"-> Semi-Join Pushdown bypassed (large keys list: {len(key_values)}). Running full remote query.")
                 
             # Execute remote query
+            self.last_executed_remote_query = remote_q
             remote_engine = self.db_engines.get(remote_db)
             if not remote_engine:
                 raise ValueError(f"No database connection engine configured for: {remote_db}")
                 
             remote_rows = []
             if remote_q:
-                from sqlalchemy import text
-                with remote_engine.connect() as conn:
-                    res = conn.execute(text(remote_q))
-                    keys = [k.lower() for k in res.keys()]
-                    for row in res:
-                        remote_rows.append({k: v for k, v in zip(keys, row)})
+                # 1. Attempt to retrieve from sub-query cache
+                if self.cache_manager:
+                    cached_remote_rows = self.cache_manager.get_sql(remote_q)
+                    if cached_remote_rows is not None:
+                        remote_rows = cached_remote_rows
+                
+                # 2. Cache miss: run remote query and cache result
+                if not remote_rows:
+                    from sqlalchemy import text
+                    with remote_engine.connect() as conn:
+                        res = conn.execute(text(remote_q))
+                        keys = [k.lower() for k in res.keys()]
+                        for row in res:
+                            remote_rows.append({k: v for k, v in zip(keys, row)})
+                    
+                    if self.cache_manager:
+                        self.cache_manager.set_sql(remote_q, remote_rows)
                         
             # Perform client-side hash join
             local_lookup = {}

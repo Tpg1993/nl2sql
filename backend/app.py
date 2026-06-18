@@ -310,19 +310,19 @@ app.add_middleware(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Initialize agent
-try:
-    agent = EHRQueryAgent()
-except Exception as e:
-    print(f"Error initializing agent: {e}")
-    agent = None
-
 # Initialize cache manager (defaults to 1 hour TTL)
 try:
     cache_manager = get_cache_manager(ttl_seconds=3600)
 except Exception as e:
     print(f"Error initializing cache manager: {e}")
     cache_manager = None
+
+# Initialize agent
+try:
+    agent = EHRQueryAgent(cache_manager=cache_manager)
+except Exception as e:
+    print(f"Error initializing agent: {e}")
+    agent = None
 
 # Initialize cryptographic audit ledger
 try:
