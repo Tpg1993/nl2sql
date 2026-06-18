@@ -4,10 +4,13 @@ This document tracks the feature additions, database routing, model integrations
 
 ---
 
-## [v21_sarvam_federated_query_router](#v21_sarvam_federated_query_router) (Planned Branch)
+## [v21_sarvam_federated_query_router](#v21_sarvam_federated_query_router) (Current Active Branch)
 *   **Release Focus**: Federated Query Virtualization across multiple SQLite/Cloud Databricks databases.
+*   **Federated Join Engine**: Dynamically routes and decomposes queries involving local tables (e.g. `patients` in `db_local_ehr`) and remote tables (e.g. `encounters` in `db_remote_warehouse`), joining outcomes in-memory.
+*   **Semi-Join Pushdown**: Optimizes remote scans by dynamically injecting candidate keys as an `IN` constraint to avoid loading massive database tables.
+*   **Automated Validation**: Verified via dedicated unit tests (`test_federated_query.py`) and Selenium integration scenario (`test_17`) capturing visual E2E execution screenshots.
 
-## [v20_visual_charting](#v20_visual_charting) (Current Active Branch)
+## [v20_visual_charting](#v20_visual_charting)
 *   **Release Focus**: Dynamic Visual Charting & Graphing modal with customizable axis selector controls.
 *   **Interactive Modal Integration**: Adds client-side Chart.js query result visualization (Bar, Line, Pie, and Doughnut charts) inside the dashboard, with automatically matching light/dark styling.
 *   **Dynamic Data Scans**: Evaluates dataset numeric columns on the fly and presents a "Visualize Results" option to launch the interactive canvas dialog.

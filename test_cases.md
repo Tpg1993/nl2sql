@@ -222,3 +222,18 @@ These queries verify the client-side interactive visualization engine.
     *   Clicking the button opens the **Dynamic Query Visualization** modal.
     *   The modal contains an interactive Chart.js canvas showing a Bar Chart of severity counts, with options to toggle chart types (Bar, Line, Pie, Doughnut) and customize X/Y axes.
 *   **Why it tests**: Validates dynamic scanning for chartable result tables, modal activation, dropdown selector population, and Chart.js canvas rendering.
+
+---
+
+## 8. Federated Query Virtualization Router
+
+These queries verify the split-join query router logic across local SQLite database schemas and simulated remote Databricks SQL databases.
+
+### Test Case 8.1: Federated Patient Encounter and Department Join
+*   **Question**: `Show patient names, their encounter charges, and their departments ordered by total charges.`
+*   **Expected Behavior**:
+    *   The agent detects that the query spans `patients` (local) and `encounters` & `departments` (remote) using `TABLE_DB_MAPPINGS`.
+    *   The query is decomposed into a local SELECT and a remote SELECT.
+    *   A **Semi-Join Pushdown** runs: local matching keys are pushed as an `IN` constraint to the remote sub-query.
+    *   The sub-query results are joined client-side in-memory and presented in the result table in the UI.
+*   **Why it tests**: Verifies E2E database query routing, sub-query decomposition, semi-join optimization, client-side sorting, and final dataset rendering.

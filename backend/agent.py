@@ -35,6 +35,22 @@ TABLE_LOCATIONS = {
     "lab_results": "remote"
 }
 
+TABLE_DB_MAPPINGS = {
+    "patients": "db_local_ehr",
+    "vitals": "db_local_ehr",
+    "allergies": "db_local_ehr",
+    "diagnoses": "db_local_ehr",
+    "medications": "db_local_ehr",
+    "billing": "db_local_billing",
+    "claims": "db_local_billing",
+    "departments": "db_remote_warehouse",
+    "providers": "db_remote_warehouse",
+    "encounters": "db_remote_warehouse",
+    "lab_orders": "db_remote_warehouse",
+    "lab_results": "db_remote_warehouse"
+}
+
+
 def get_expr_key(expr):
     if expr.alias:
         return expr.alias.lower()
@@ -100,6 +116,30 @@ class EHRQueryAgent:
             self.engine = create_engine(db_uri)
             
         self.db = SQLDatabase(self.engine, sample_rows_in_table_info=3)
+
+        # Initialize multi-database connection pool
+        self.db_engines = {}
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        
+        # 1. Local EHR Database connection
+        ehr_db_path = os.environ.get("SQLITE_EHR_DB_PATH")
+        if not ehr_db_path:
+            ehr_db_path = os.path.join(BASE_DIR, "ehr_data.db")
+        ehr_db_path = os.path.abspath(ehr_db_path)
+        ehr_creator = lambda: sqlite3.connect(f"file:{ehr_db_path}?mode=ro", uri=True)
+        self.db_engines["db_local_ehr"] = create_engine("sqlite://", creator=ehr_creator)
+        
+        # 2. Local Billing Database connection
+        billing_db_path = os.environ.get("SQLITE_BILLING_DB_PATH")
+        if not billing_db_path:
+            billing_db_path = ehr_db_path  # Fallback to EHR database
+        billing_db_path = os.path.abspath(billing_db_path)
+        billing_creator = lambda: sqlite3.connect(f"file:{billing_db_path}?mode=ro", uri=True)
+        self.db_engines["db_local_billing"] = create_engine("sqlite://", creator=billing_creator)
+        
+        # 3. Remote Warehouse connection (using self.engine as the default remote engine)
+        self.db_engines["db_remote_warehouse"] = self.engine
+
         
         print(f"Database Dialect: {self.db.dialect}")
         print(f"Available Tables: {self.db.get_usable_table_names()}")
@@ -672,29 +712,28 @@ class EHRQueryAgent:
         return {"messages": [result], "latencies": latencies}
 
     def is_federated_query(self, sql_query: str) -> bool:
-        """Determines if a query requires federated join between local SQLite and remote Databricks SQL."""
+        """Determines if a query requires federated join across different databases."""
         if not sql_query or not sql_query.strip():
             return False
         try:
             parsed = sqlglot.parse_one(sql_query)
             tables = [t.name.lower() for t in parsed.find_all(exp.Table)]
-            has_local = False
-            has_remote = False
+            
+            involved_dbs = set()
             for t in tables:
-                loc = TABLE_LOCATIONS.get(t)
-                if loc == "local":
-                    has_local = True
-                elif loc == "remote":
-                    has_remote = True
-            return has_local and has_remote
+                db_name = TABLE_DB_MAPPINGS.get(t)
+                if db_name:
+                    involved_dbs.add(db_name)
+                    
+            return len(involved_dbs) > 1
         except Exception:
             # Fallback simple search
             query_lower = sql_query.lower()
-            local_tables = ["patients", "vitals", "allergies", "diagnoses", "medications"]
-            remote_tables = ["departments", "providers", "encounters", "lab_orders", "lab_results"]
-            has_local = any(t in query_lower for t in local_tables)
-            has_remote = any(t in query_lower for t in remote_tables)
-            return has_local and has_remote
+            involved_dbs = set()
+            for table, db_name in TABLE_DB_MAPPINGS.items():
+                if table in query_lower:
+                    involved_dbs.add(db_name)
+            return len(involved_dbs) > 1
 
     def decompose_query(self, sql: str):
         parsed = sqlglot.parse_one(sql)
@@ -706,18 +745,16 @@ class EHRQueryAgent:
             table_name = table.name.lower()
             table_aliases[alias or table_name] = table_name
 
-        # 2. Track local vs remote aliases
-        local_aliases = set()
-        remote_aliases = set()
+        # 2. Track database name for aliases
+        alias_dbs = {}
+        dbs_aliases = {}
         for alias, tbl in table_aliases.items():
-            if TABLE_LOCATIONS.get(tbl, "local") == "local":
-                local_aliases.add(alias)
-            else:
-                remote_aliases.add(alias)
+            db_name = TABLE_DB_MAPPINGS.get(tbl, "db_local_ehr")
+            alias_dbs[alias] = db_name
+            dbs_aliases.setdefault(db_name, set()).add(alias)
 
         # 3. Find cross-boundary join conditions
-        local_join_keys = {}
-        remote_join_keys = {}
+        join_keys_by_db = {db: {} for db in TABLE_DB_MAPPINGS.values()}
         join_conditions = []
         
         for join in parsed.find_all(exp.Join):
@@ -732,22 +769,21 @@ class EHRQueryAgent:
                         left_tbl = table_aliases.get(left_alias, left_alias)
                         right_tbl = table_aliases.get(right_alias, right_alias)
                         
-                        left_loc = TABLE_LOCATIONS.get(left_tbl, "local")
-                        right_loc = TABLE_LOCATIONS.get(right_tbl, "local")
+                        left_db = alias_dbs.get(left_alias, "db_local_ehr")
+                        right_db = alias_dbs.get(right_alias, "db_local_ehr")
                         
-                        if left_loc != right_loc:
-                            if left_loc == "local":
-                                local_join_keys.setdefault(left_alias, set()).add(left.name.lower())
-                                remote_join_keys.setdefault(right_alias, set()).add(right.name.lower())
+                        if left_db != right_db:
+                            if left_db in ("db_local_ehr", "db_local_billing"):
+                                join_keys_by_db[left_db].setdefault(left_alias, set()).add(left.name.lower())
+                                join_keys_by_db[right_db].setdefault(right_alias, set()).add(right.name.lower())
                                 join_conditions.append((left_alias, left.name.lower(), right_alias, right.name.lower()))
                             else:
-                                remote_join_keys.setdefault(left_alias, set()).add(left.name.lower())
-                                local_join_keys.setdefault(right_alias, set()).add(right.name.lower())
+                                join_keys_by_db[right_db].setdefault(left_alias, set()).add(left.name.lower())
+                                join_keys_by_db[left_db].setdefault(right_alias, set()).add(right.name.lower())
                                 join_conditions.append((right_alias, right.name.lower(), left_alias, left.name.lower()))
                                 
-        # 4. Group select expressions by location
-        local_selects = []
-        remote_selects = []
+        # 4. Group select expressions by database
+        selects_by_db = {db: [] for db in TABLE_DB_MAPPINGS.values()}
         LOCAL_COLUMNS = {
             "patient_id", "mrn", "full_name", "gender", "dob", "phone", "email", "city", "state", "blood_group", "marital_status",
             "vital_id", "measurement_date", "systolic", "diastolic", "pulse", "temperature", "respiratory_rate",
@@ -757,79 +793,66 @@ class EHRQueryAgent:
         }
         for expr in parsed.expressions:
             referenced_aliases = {c.table for c in expr.find_all(exp.Column) if c.table}
-            is_local = any(a in local_aliases for a in referenced_aliases)
-            is_remote = any(a in remote_aliases for a in referenced_aliases)
-            
-            if not referenced_aliases:
+            if referenced_aliases:
+                for a in referenced_aliases:
+                    db = alias_dbs.get(a, "db_local_ehr")
+                    selects_by_db.setdefault(db, []).append(expr)
+            else:
                 cols = [c.name.lower() for c in expr.find_all(exp.Column)]
                 for col in cols:
-                    if col in LOCAL_COLUMNS:
-                        is_local = True
-                    else:
-                        is_remote = True
-            
-            if is_local:
-                local_selects.append(expr)
-            if is_remote:
-                remote_selects.append(expr)
-                
-        # 5. Add join keys to selects
-        for alias, keys in local_join_keys.items():
-            for key in keys:
-                col_expr = exp.Column(this=exp.to_identifier(key), table=exp.to_identifier(alias))
-                if not any(s.sql().lower() == col_expr.sql().lower() or (s.alias.lower() == key if s.alias else False) for s in local_selects):
-                    local_selects.append(col_expr)
+                    db = "db_local_ehr" if col in LOCAL_COLUMNS else "db_remote_warehouse"
+                    selects_by_db.setdefault(db, []).append(expr)
                     
-        for alias, keys in remote_join_keys.items():
-            for key in keys:
-                col_expr = exp.Column(this=exp.to_identifier(key), table=exp.to_identifier(alias))
-                if not any(s.sql().lower() == col_expr.sql().lower() or (s.alias.lower() == key if s.alias else False) for s in remote_selects):
-                    remote_selects.append(col_expr)
+        # 5. Add join keys to selects
+        for db_name, join_keys in join_keys_by_db.items():
+            for alias, keys in join_keys.items():
+                for key in keys:
+                    col_expr = exp.Column(this=exp.to_identifier(key), table=exp.to_identifier(alias))
+                    selects = selects_by_db.setdefault(db_name, [])
+                    if not any(s.sql().lower() == col_expr.sql().lower() or (s.alias.lower() == key if s.alias else False) for s in selects):
+                        selects.append(col_expr)
 
-        # Helper to build sub-query
-        def build_side_query(side_selects, side_aliases):
-            # Find the FROM table
+        # Helper to build database sub-query
+        def build_db_query(db_selects, db_aliases):
+            if not db_selects or not db_aliases:
+                return ""
             from_node = parsed.args.get("from")
             main_table_node = None
             if from_node:
                 main_table_node = from_node.this
                 main_alias = main_table_node.alias or main_table_node.name.lower()
-                if main_alias not in side_aliases:
+                if main_alias not in db_aliases:
                     main_table_node = None
             
-            # If main table is not on this side, find the first join table on this side
             if not main_table_node:
                 for join in parsed.find_all(exp.Join):
                     join_table = join.this
                     j_alias = join_table.alias or join_table.name.lower()
-                    if j_alias in side_aliases:
+                    if j_alias in db_aliases:
                         main_table_node = join_table
                         break
             
             if not main_table_node:
-                # Fallback if no table found on this side
                 return ""
             
             alias_str = f" AS {main_table_node.alias}" if main_table_node.alias else ""
-            query_str = "SELECT " + ", ".join(s.sql() for s in side_selects)
+            query_str = "SELECT " + ", ".join(s.sql() for s in db_selects)
             query_str += f" FROM {main_table_node.name}{alias_str}"
             
-            # Add joins
             for join in parsed.find_all(exp.Join):
                 join_table = join.this
                 j_alias = join_table.alias or join_table.name.lower()
-                if j_alias in side_aliases and join_table != main_table_node:
+                if j_alias in db_aliases and join_table != main_table_node:
                     query_str += f" {join.sql()}"
             
-            # Add side filters
             where_node = parsed.args.get("where")
             side_filters = []
             if where_node:
                 def get_cond_loc(cond):
                     cols = list(cond.find_all(exp.Column))
                     aliases = {c.table for c in cols if c.table}
-                    is_s = any(a in side_aliases for a in aliases)
-                    is_oth = any(a not in side_aliases for a in aliases)
+                    is_s = any(a in db_aliases for a in aliases)
+                    is_oth = any(a not in db_aliases for a in aliases)
                     if is_s and not is_oth:
                         return "side"
                     if is_oth and not is_s:
@@ -851,47 +874,104 @@ class EHRQueryAgent:
                 
             return query_str
 
-        local_query = build_side_query(local_selects, local_aliases)
-        remote_query = build_side_query(remote_selects, remote_aliases)
+        # Generate sub-queries for all active databases
+        queries_by_db = {}
+        for db, db_aliases in dbs_aliases.items():
+            queries_by_db[db] = build_db_query(selects_by_db.get(db, []), db_aliases)
+            
+        self.last_decomposed_queries = queries_by_db
+        
+        local_query = queries_by_db.get("db_local_ehr", "")
+        remote_query = queries_by_db.get("db_remote_warehouse", "")
         
         return local_query, remote_query, join_conditions, parsed
 
     def execute_federated_query(self, sql_query: str) -> str:
         """Executes federated query by querying SQLite and Databricks separately, and joining outcomes in-memory."""
+        print("-> Running Federated Join across multiple databases...")
         print("-> Running Federated Join across local SQLite and remote Databricks...")
         try:
             local_q, remote_q, joins, parsed = self.decompose_query(sql_query)
             print(f"Local query decomposed: {local_q}")
             print(f"Remote query decomposed: {remote_q}")
             
-            # Execute local query on SQLite
-            import sqlite3
-            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-            sqlite_db = os.path.join(BASE_DIR, "ehr_data.db")
-            
-            # Open SQLite connection (read-only for security)
-            sqlite_conn = sqlite3.connect(f"file:{sqlite_db}?mode=ro", uri=True)
-            sqlite_conn.row_factory = lambda cursor, row: {col[0].lower(): row[idx] for idx, col in enumerate(cursor.description)}
-            
-            local_cursor = sqlite_conn.execute(local_q)
-            local_rows = local_cursor.fetchall()
-            sqlite_conn.close()
-            
-            # Execute remote query on the remote engine (Databricks or fallback SQLite engine)
-            remote_rows = []
-            from sqlalchemy import text
-            with self.engine.connect() as db_conn:
-                res = db_conn.execute(text(remote_q))
-                keys = [k.lower() for k in res.keys()]
-                for row in res:
-                    remote_rows.append({k: v for k, v in zip(keys, row)})
-                    
-            # Perform client-side hash join
+            # Map aliases to table names and databases
+            table_aliases = {}
+            for table in parsed.find_all(exp.Table):
+                alias = table.alias
+                table_name = table.name.lower()
+                table_aliases[alias or table_name] = table_name
+                
+            def get_alias_db(alias):
+                tbl = table_aliases.get(alias, alias)
+                return TABLE_DB_MAPPINGS.get(tbl, "db_local_ehr")
+
             if not joins:
                 raise ValueError("No cross-boundary join conditions found in the query.")
                 
             local_alias, local_key, remote_alias, remote_key = joins[0]
+            local_db = get_alias_db(local_alias)
+            remote_db = get_alias_db(remote_alias)
             
+            # Execute local query
+            local_engine = self.db_engines.get(local_db)
+            if not local_engine:
+                raise ValueError(f"No database connection engine configured for: {local_db}")
+                
+            local_rows = []
+            if local_q:
+                from sqlalchemy import text
+                with local_engine.connect() as conn:
+                    res = conn.execute(text(local_q))
+                    keys = [k.lower() for k in res.keys()]
+                    for row in res:
+                        local_rows.append({k: v for k, v in zip(keys, row)})
+                        
+            # Extract candidate key values
+            key_values = set()
+            for row in local_rows:
+                val = row.get(local_key)
+                if val is not None:
+                    key_values.add(val)
+                    
+            # Short-circuit remote query execution if local side has no candidate matches
+            if not key_values:
+                print("-> Semi-Join Pushdown: No candidate key matches found in local DB. Short-circuiting remote execution.")
+                return "[]"
+                
+            # Semi-Join Pushdown: dynamically inject keys as IN constraint if size is reasonable
+            if len(key_values) <= 1000:
+                print(f"-> Semi-Join Pushdown: Injecting {len(key_values)} candidate keys into remote sub-query.")
+                try:
+                    parsed_remote = sqlglot.parse_one(remote_q)
+                    in_clause = exp.In(
+                        this=exp.column(remote_key, table=remote_alias),
+                        expressions=[exp.Literal.number(v) if isinstance(v, (int, float)) else exp.Literal.string(str(v)) for v in key_values]
+                    )
+                    parsed_remote = parsed_remote.where(in_clause)
+                    remote_q_optimized = parsed_remote.sql()
+                    print(f"-> Optimized remote query: {remote_q_optimized}")
+                    remote_q = remote_q_optimized
+                except Exception as pe:
+                    print(f"-> Semi-Join Pushdown optimization failed: {pe}. Falling back to standard query.")
+            else:
+                print(f"-> Semi-Join Pushdown bypassed (large keys list: {len(key_values)}). Running full remote query.")
+                
+            # Execute remote query
+            remote_engine = self.db_engines.get(remote_db)
+            if not remote_engine:
+                raise ValueError(f"No database connection engine configured for: {remote_db}")
+                
+            remote_rows = []
+            if remote_q:
+                from sqlalchemy import text
+                with remote_engine.connect() as conn:
+                    res = conn.execute(text(remote_q))
+                    keys = [k.lower() for k in res.keys()]
+                    for row in res:
+                        remote_rows.append({k: v for k, v in zip(keys, row)})
+                        
+            # Perform client-side hash join
             local_lookup = {}
             for row in local_rows:
                 key_val = row.get(local_key)

@@ -77,5 +77,34 @@ class TestFederatedQueryRouter(unittest.TestCase):
         self.assertEqual(first_row[0], "Saanvi Das")
         self.assertEqual(first_row[1], "Diabetology")
 
+    def test_table_db_mappings_resolution(self):
+        from backend.agent import TABLE_DB_MAPPINGS
+        self.assertEqual(TABLE_DB_MAPPINGS["patients"], "db_local_ehr")
+        self.assertEqual(TABLE_DB_MAPPINGS["billing"], "db_local_billing")
+        self.assertEqual(TABLE_DB_MAPPINGS["encounters"], "db_remote_warehouse")
+
+    def test_semi_join_pushdown_optimization(self):
+        # A query where patient has specific filter to trigger IN pushdown
+        sql = (
+            "SELECT p.full_name, e.total_charges "
+            "FROM patients p "
+            "JOIN encounters e ON p.patient_id = e.patient_id "
+            "WHERE p.patient_id = 1"
+        )
+        res_str = self.agent.execute_federated_query(sql)
+        import ast
+        res_list = ast.literal_eval(res_str)
+        self.assertTrue(isinstance(res_list, list))
+        
+        # Verify that if local match yields no rows, the execution short-circuits to empty array
+        sql_empty = (
+            "SELECT p.full_name, e.total_charges "
+            "FROM patients p "
+            "JOIN encounters e ON p.patient_id = e.patient_id "
+            "WHERE p.patient_id = -9999" # invalid patient ID
+        )
+        res_empty_str = self.agent.execute_federated_query(sql_empty)
+        self.assertEqual(res_empty_str, "[]")
+
 if __name__ == "__main__":
     unittest.main()

@@ -75,3 +75,13 @@ This folder contains the visual execution proof and user interface states for th
 * **Filename**: `15_GitOps_PR_Sync_Tab.png`
 * **Functionality**: Renders active branch metadata and lists all other local and remote repository branches as target base branch merge destinations. Displays PR Title and Description textareas, and alerts if `GITHUB_TOKEN` credentials are unconfigured.
 * **E2E Tests**: Verified via Selenium automated testing (`test_16`). ✅
+
+## 16. Federated Query Router & In-Memory Join
+* **Filename**: `16_Federated_Query_Router.png`
+* **Functionality**: Dynamically routes queries joining tables on local SQLite (`patients`) and remote Databricks (`encounters`, `departments`). It splits the AST, issues queries to their respective DB connection engines, optimizes with a Semi-Join Pushdown constraint, and aggregates unified rows client-side.
+* **E2E Tests**: Verified via Selenium E2E automated test (`test_17`). ✅
+
+## 17. Visual Charting & Dynamic Graphing Modal
+* **Filename**: `17_Visual_Charting_Modal.png`
+* **Functionality**: Evaluates query datasets for numeric values and offers a "Visualize Results" option. Generates interactive Chart.js widgets (Bar, Line, Pie, and Doughnut views) matching the UI theme.
+* **E2E Tests**: Verified via Selenium E2E automated test (`test_18`). ✅
