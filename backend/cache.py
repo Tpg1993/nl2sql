@@ -9,12 +9,12 @@ class BaseCacheManager(ABC):
     """Abstract base class defining the cache contract for the NL2SQL Agent."""
 
     @abstractmethod
-    def get(self, question: str) -> dict | None:
+    def get(self, question: str, tenant_id: str | None = None) -> dict | None:
         """Retrieve cached query details for a question if they exist and are not expired."""
         pass
 
     @abstractmethod
-    def set(self, question: str, query: str, result: any, summary: str, tokens: dict | None) -> None:
+    def set(self, question: str, query: str, result: any, summary: str, tokens: dict | None, tenant_id: str | None = None) -> None:
         """Store query details, database results, conversational summaries, and token usage in the cache."""
         pass
 
@@ -77,12 +77,15 @@ class SQLiteCacheManager(BaseCacheManager):
             """)
             conn.commit()
 
-    def get(self, question: str) -> dict | None:
+    def get(self, question: str, tenant_id: str | None = None) -> dict | None:
         """Gets cached details for a question if they exist and are not expired."""
         if self.ttl <= 0:
             return None  # Caching is disabled
 
-        key_hash = hashlib.sha256(question.lower().strip().encode("utf-8")).hexdigest()
+        key_src = question.lower().strip()
+        if tenant_id:
+            key_src = f"{key_src}:{tenant_id}"
+        key_hash = hashlib.sha256(key_src.encode("utf-8")).hexdigest()
         
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -113,12 +116,15 @@ class SQLiteCacheManager(BaseCacheManager):
             
         return None
 
-    def set(self, question: str, query: str, result: any, summary: str, tokens: dict | None) -> None:
+    def set(self, question: str, query: str, result: any, summary: str, tokens: dict | None, tenant_id: str | None = None) -> None:
         """Stores query details and results in the cache."""
         if self.ttl <= 0:
             return  # Caching is disabled
 
-        key_hash = hashlib.sha256(question.lower().strip().encode("utf-8")).hexdigest()
+        key_src = question.lower().strip()
+        if tenant_id:
+            key_src = f"{key_src}:{tenant_id}"
+        key_hash = hashlib.sha256(key_src.encode("utf-8")).hexdigest()
         
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -230,17 +236,20 @@ class RedisCacheManager(BaseCacheManager):
         """Ping Redis server to check connection health."""
         return self.client.ping()
 
-    def _get_key(self, question: str) -> str:
+    def _get_key(self, question: str, tenant_id: str | None = None) -> str:
         """Generates a unique Redis key using SHA256 hash of the normalized question."""
-        key_hash = hashlib.sha256(question.lower().strip().encode("utf-8")).hexdigest()
+        key_src = question.lower().strip()
+        if tenant_id:
+            key_src = f"{key_src}:{tenant_id}"
+        key_hash = hashlib.sha256(key_src.encode("utf-8")).hexdigest()
         return f"nl2sql:cache:{key_hash}"
 
-    def get(self, question: str) -> dict | None:
+    def get(self, question: str, tenant_id: str | None = None) -> dict | None:
         """Gets cached details for a question if they exist."""
         if self.ttl <= 0:
             return None
 
-        key = self._get_key(question)
+        key = self._get_key(question, tenant_id)
         try:
             cached_data = self.client.get(key)
             if cached_data:
@@ -250,12 +259,12 @@ class RedisCacheManager(BaseCacheManager):
             print(f"Error reading from Redis cache: {e}")
         return None
 
-    def set(self, question: str, query: str, result: any, summary: str, tokens: dict | None) -> None:
+    def set(self, question: str, query: str, result: any, summary: str, tokens: dict | None, tenant_id: str | None = None) -> None:
         """Stores query details and results in Redis with TTL expiration."""
         if self.ttl <= 0:
             return
 
-        key = self._get_key(question)
+        key = self._get_key(question, tenant_id)
         payload = {
             "query": query,
             "result": result,

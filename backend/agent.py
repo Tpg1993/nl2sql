@@ -275,7 +275,7 @@ class EHRQueryAgent:
                 
                 # Try to extract the user's actual query from the formatted prompt templates
                 user_q = ""
-                match = re.search(r"User Query Request:\s*(.*)", prompt_text, re.IGNORECASE)
+                match = re.search(r"User Query Request.*:\s*(.*)", prompt_text, re.IGNORECASE)
                 if not match:
                     match = re.search(r"User Question:\s*(.*)", prompt_text, re.IGNORECASE)
                 if not match:
@@ -314,7 +314,12 @@ class EHRQueryAgent:
                         sql_query = "SELECT COUNT(*) FROM patients;"
                         summary = "There are 1000 patients in total."
                         
-                is_summarize = "summarize" in prompt_lower or "result" in prompt_lower or "clinical summary" in prompt_lower or "conversational results summary" in prompt_lower
+                is_summarize = (
+                    "clinical data summarizer" in prompt_lower or
+                    "polite response explaining" in prompt_lower or
+                    "conversational results summary" in prompt_lower or
+                    "write a brief, polite response" in prompt_lower
+                )
                 
                 content = summary if is_summarize else sql_query
                 ai_msg = AIMessage(content=content)
@@ -600,9 +605,19 @@ class EHRQueryAgent:
                 # Update the message in-place in the graph state so the modified query is returned and displayed
                 target_msg.content = sql_query
 
-            # Execute query (Federated or Standard)
-            if self.is_federated_query(sql_query):
-                result = self.execute_federated_query(sql_query)
+            # Execute query (Federated or Tenant routing or Standard)
+            dbs = self.get_query_dbs(sql_query)
+            is_fed = len(dbs) > 1
+            has_tenant = False
+            user_context = state.get("user_context") or {}
+            tenant_id = user_context.get("attributes", {}).get("tenant_id")
+            if tenant_id and tenant_id != "default":
+                has_tenant = True
+                
+            if is_fed:
+                result = self.execute_federated_query(sql_query, user_context=user_context)
+            elif has_tenant and len(dbs) == 1:
+                result = self.execute_single_db_query(sql_query, dbs[0], user_context=user_context)
             else:
                 result = self.run_query_tool.invoke(sql_query)
 
@@ -941,7 +956,86 @@ class EHRQueryAgent:
         
         return local_query, remote_query, join_conditions, parsed
 
-    def execute_federated_query(self, sql_query: str) -> str:
+    def _get_pushdown_threshold(self, local_alias: str) -> int:
+        """Determines adaptive pushdown threshold based on local table size."""
+        tbl_name = local_alias.lower()
+        if hasattr(self, "semantic_layer") and self.semantic_layer:
+            tbl_resolved = self.semantic_layer.get_table_name(local_alias)
+            if tbl_resolved:
+                tbl_name = tbl_resolved.lower()
+        
+        tbl_size = 0
+        if hasattr(self, "cost_planner") and self.cost_planner:
+            tbl_size = self.cost_planner.table_sizes.get(tbl_name, 0)
+            
+        if tbl_size > 0:
+            # Scale threshold between 500 and 1500 based on 20% of table cardinality
+            adaptive = int(tbl_size * 0.20)
+            return max(500, min(1500, adaptive))
+        return 1000
+
+    def _get_engine_for_db(self, db_name: str, user_context: dict = None) -> Any:
+        """Returns the appropriate database engine, dynamically routing based on tenant context."""
+        tenant_id = "default"
+        if user_context and isinstance(user_context, dict):
+            tenant_id = user_context.get("attributes", {}).get("tenant_id", "default")
+
+        # Dynamic routing for SQLite local databases
+        if db_name in ("db_local_ehr", "db_local_billing") and tenant_id and tenant_id != "default":
+            # Check if tenant-specific DB exists
+            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+            tenant_db_path = os.path.join(BASE_DIR, f"ehr_data_{tenant_id}.db")
+            if os.path.exists(tenant_db_path):
+                # Use a cached tenant engine if already initialized
+                cache_key = f"{db_name}_{tenant_id}"
+                if not hasattr(self, "_tenant_engines"):
+                    self._tenant_engines = {}
+                if cache_key not in self._tenant_engines:
+                    path = os.path.abspath(tenant_db_path)
+                    creator = lambda: sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+                    self._tenant_engines[cache_key] = create_engine("sqlite://", creator=creator)
+                return self._tenant_engines[cache_key]
+                
+        # Default static connection resolution
+        return self.db_engines.get(db_name, self.engine)
+
+    def get_query_dbs(self, sql_query: str) -> List[str]:
+        """Identifies which databases are involved in a query by parsing table references."""
+        if not sql_query or not sql_query.strip():
+            return []
+        try:
+            parsed = sqlglot.parse_one(sql_query)
+            tables = [t.name.lower() for t in parsed.find_all(exp.Table)]
+            involved_dbs = set()
+            for t in tables:
+                db_name = TABLE_DB_MAPPINGS.get(t)
+                if db_name:
+                    involved_dbs.add(db_name)
+            return list(involved_dbs)
+        except Exception:
+            # Fallback simple string matching
+            query_lower = sql_query.lower()
+            involved_dbs = set()
+            for table, db_name in TABLE_DB_MAPPINGS.items():
+                if f" {table}" in query_lower or f"({table}" in query_lower or f".{table}" in query_lower:
+                    involved_dbs.add(db_name)
+            return list(involved_dbs)
+
+    def execute_single_db_query(self, sql_query: str, db_name: str, user_context: dict = None) -> str:
+        """Executes a query against a single database engine dynamically resolved based on tenant context."""
+        try:
+            from sqlalchemy import text
+            engine = self._get_engine_for_db(db_name, user_context)
+            with engine.connect() as conn:
+                res = conn.execute(text(sql_query))
+                if res.returns_rows:
+                    rows = res.fetchall()
+                    return str([tuple(row) for row in rows])
+                return "[]"
+        except Exception as e:
+            return f"Error executing query: {str(e)}"
+
+    def execute_federated_query(self, sql_query: str, user_context: dict = None) -> str:
         """Executes federated query by querying SQLite and Databricks separately, and joining outcomes in-memory."""
         print("-> Running Federated Join across multiple databases...")
         print("-> Running Federated Join across local SQLite and remote Databricks...")
@@ -968,76 +1062,113 @@ class EHRQueryAgent:
             local_db = get_alias_db(local_alias)
             remote_db = get_alias_db(remote_alias)
             
-            # Execute local query
-            local_engine = self.db_engines.get(local_db)
+            local_engine = self._get_engine_for_db(local_db, user_context)
+            remote_engine = self._get_engine_for_db(remote_db, user_context)
+            
             if not local_engine:
                 raise ValueError(f"No database connection engine configured for: {local_db}")
-                
-            local_rows = []
-            if local_q:
-                from sqlalchemy import text
-                with local_engine.connect() as conn:
-                    res = conn.execute(text(local_q))
-                    keys = [k.lower() for k in res.keys()]
-                    for row in res:
-                        local_rows.append({k: v for k, v in zip(keys, row)})
-                        
-            # Extract candidate key values
-            key_values = set()
-            for row in local_rows:
-                val = row.get(local_key)
-                if val is not None:
-                    key_values.add(val)
-                    
-            # Short-circuit remote query execution if local side has no candidate matches
-            if not key_values:
-                print("-> Semi-Join Pushdown: No candidate key matches found in local DB. Short-circuiting remote execution.")
-                return "[]"
-                
-            # Semi-Join Pushdown: dynamically inject keys as IN constraint if size is reasonable
-            if len(key_values) <= 1000:
-                print(f"-> Semi-Join Pushdown: Injecting {len(key_values)} candidate keys into remote sub-query.")
-                try:
-                    parsed_remote = sqlglot.parse_one(remote_q)
-                    in_clause = exp.In(
-                        this=exp.column(remote_key, table=remote_alias),
-                        expressions=[exp.Literal.number(v) if isinstance(v, (int, float)) else exp.Literal.string(str(v)) for v in key_values]
-                    )
-                    parsed_remote = parsed_remote.where(in_clause)
-                    remote_q_optimized = parsed_remote.sql()
-                    print(f"-> Optimized remote query: {remote_q_optimized}")
-                    remote_q = remote_q_optimized
-                except Exception as pe:
-                    print(f"-> Semi-Join Pushdown optimization failed: {pe}. Falling back to standard query.")
-            else:
-                print(f"-> Semi-Join Pushdown bypassed (large keys list: {len(key_values)}). Running full remote query.")
-                
-            # Execute remote query
-            self.last_executed_remote_query = remote_q
-            remote_engine = self.db_engines.get(remote_db)
             if not remote_engine:
                 raise ValueError(f"No database connection engine configured for: {remote_db}")
                 
-            remote_rows = []
-            if remote_q:
-                # 1. Attempt to retrieve from sub-query cache
-                if self.cache_manager:
-                    cached_remote_rows = self.cache_manager.get_sql(remote_q)
-                    if cached_remote_rows is not None:
-                        remote_rows = cached_remote_rows
-                
-                # 2. Cache miss: run remote query and cache result
-                if not remote_rows:
-                    from sqlalchemy import text
-                    with remote_engine.connect() as conn:
-                        res = conn.execute(text(remote_q))
+            from sqlalchemy import text
+            import concurrent.futures
+            
+            # Helpers to fetch data
+            def fetch_local():
+                rows = []
+                if local_q:
+                    with local_engine.connect() as conn:
+                        res = conn.execute(text(local_q))
                         keys = [k.lower() for k in res.keys()]
                         for row in res:
-                            remote_rows.append({k: v for k, v in zip(keys, row)})
-                    
+                            rows.append({k: v for k, v in zip(keys, row)})
+                return rows
+
+            def fetch_remote(q):
+                rows = []
+                if q:
+                    # 1. Attempt to retrieve from sub-query cache
                     if self.cache_manager:
-                        self.cache_manager.set_sql(remote_q, remote_rows)
+                        cached_remote_rows = self.cache_manager.get_sql(q)
+                        if cached_remote_rows is not None:
+                            return cached_remote_rows
+                    
+                    # 2. Cache miss: run remote query
+                    with remote_engine.connect() as conn:
+                        res = conn.execute(text(q))
+                        keys = [k.lower() for k in res.keys()]
+                        for row in res:
+                            rows.append({k: v for k, v in zip(keys, row)})
+                            
+                    if self.cache_manager:
+                        self.cache_manager.set_sql(q, rows)
+                return rows
+
+            # Resolve adaptive pushdown threshold
+            pushdown_threshold = self._get_pushdown_threshold(local_alias)
+            
+            # Get table size to estimate if we run in parallel
+            local_tbl_name = local_alias.lower()
+            if hasattr(self, "semantic_layer") and self.semantic_layer:
+                tbl_resolved = self.semantic_layer.get_table_name(local_alias)
+                if tbl_resolved:
+                    local_tbl_name = tbl_resolved.lower()
+            local_table_size = 0
+            if hasattr(self, "cost_planner") and self.cost_planner:
+                local_table_size = self.cost_planner.table_sizes.get(local_tbl_name, 0)
+
+            run_in_parallel = False
+            if local_table_size > pushdown_threshold:
+                # If local table is large, we skip sequential pushdown check and fetch concurrently
+                run_in_parallel = True
+
+            if run_in_parallel:
+                print(f"-> Parallel Execution: Local table '{local_tbl_name}' size {local_table_size} > threshold {pushdown_threshold}. Running local and remote concurrently...")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    future_local = executor.submit(fetch_local)
+                    future_remote = executor.submit(fetch_remote, remote_q)
+                    local_rows = future_local.result()
+                    remote_rows = future_remote.result()
+            else:
+                # Sequential execution with Semi-Join Pushdown optimization
+                print("-> Sequential Execution: Fetching local rows first to evaluate pushdown...")
+                local_rows = fetch_local()
+                
+                # Extract candidate key values
+                key_values = set()
+                for row in local_rows:
+                    val = row.get(local_key)
+                    if val is not None:
+                        key_values.add(val)
                         
+                # Short-circuit remote query execution if local side has no candidate matches
+                if not key_values:
+                    print("-> Semi-Join Pushdown: No candidate key matches found in local DB. Short-circuiting remote execution.")
+                    return "[]"
+                    
+                # Semi-Join Pushdown check
+                if len(key_values) <= pushdown_threshold:
+                    print(f"-> Semi-Join Pushdown: Injecting {len(key_values)} candidate keys into remote sub-query.")
+                    try:
+                        parsed_remote = sqlglot.parse_one(remote_q)
+                        in_clause = exp.In(
+                            this=exp.column(remote_key, table=remote_alias),
+                            expressions=[exp.Literal.number(v) if isinstance(v, (int, float)) else exp.Literal.string(str(v)) for v in key_values]
+                        )
+                        parsed_remote = parsed_remote.where(in_clause)
+                        remote_q_optimized = parsed_remote.sql()
+                        print(f"-> Optimized remote query: {remote_q_optimized}")
+                        remote_q_exec = remote_q_optimized
+                    except Exception as pe:
+                        print(f"-> Semi-Join Pushdown optimization failed: {pe}. Falling back to standard query.")
+                        remote_q_exec = remote_q
+                else:
+                    print(f"-> Semi-Join Pushdown bypassed (cardinality {len(key_values)} > threshold {pushdown_threshold}). Running full remote query.")
+                    remote_q_exec = remote_q
+                
+                self.last_executed_remote_query = remote_q_exec
+                remote_rows = fetch_remote(remote_q_exec)
+                
             # Perform client-side hash join
             local_lookup = {}
             for row in local_rows:
@@ -1192,7 +1323,7 @@ class EHRQueryAgent:
             "user_context": user_context,
             "retrieved_few_shots": []
         }
-        config = {"configurable": {"thread_id": thread_id}} if thread_id else None
+        config = {"configurable": {"thread_id": thread_id or "default_thread"}}
         output = self.agent.invoke(initial_state, config=config)
         return output["messages"][-1].content
 
@@ -1214,7 +1345,7 @@ class EHRQueryAgent:
             "user_context": user_context,
             "retrieved_few_shots": []
         }
-        config = {"configurable": {"thread_id": thread_id}} if thread_id else None
+        config = {"configurable": {"thread_id": thread_id or "default_thread"}}
         output = self.agent.invoke(initial_state, config=config)
 
         

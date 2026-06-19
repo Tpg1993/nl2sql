@@ -1661,5 +1661,85 @@ class TestEHRQueryAgentSelenium(unittest.TestCase):
         self._test_has_failed = False
         self.logout()
 
+    def test_22_multi_tenant_routing(self):
+        self.log("[Test 22] Testing dynamic multi-tenant routing based on authenticated user tenant_id...")
+        driver = self.driver
+        
+        # 1. Log in as doctor (Tenant B)
+        self.login("doctor", DOCTOR_PASSWORD)
+        
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # 2. Submit query for patient 1 full_name
+        input_box = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "user-input"))
+        )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
+        input_box.clear()
+        input_box.send_keys("SELECT full_name FROM patients WHERE patient_id = 1;")
+        time.sleep(0.5)
+        
+        send_btn = driver.find_element(By.ID, "send-button")
+        send_btn.click()
+        
+        # Wait for results to render
+        time.sleep(8)
+        
+        # 3. Assert Tenant B specific patient name is returned
+        result_table = WebDriverWait(driver, 45).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "result-table"))
+        )
+        self.assertTrue(result_table.is_displayed())
+        self.assertTrue("T*****" in result_table.text and "P******" in result_table.text and "1" in result_table.text)
+        self.log("-> SUCCESS: Dynamic tenant database routed correctly to ehr_data_tenant_b.db.")
+        
+        # Capture screenshot for Tenant B success
+        try:
+            screenshots_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots"))
+            os.makedirs(screenshots_dir, exist_ok=True)
+            screenshot_path = os.path.join(screenshots_dir, "21_Tenant_B_Dynamic_Routing_Success.png")
+            driver.save_screenshot(screenshot_path)
+            self.log(f"-> Captured Tenant B routing success screenshot: {screenshot_path}")
+        except Exception as e:
+            self.log(f"-> Failed to capture Tenant B screenshot: {e}")
+            
+        self.logout()
+        
+        # 4. Log in as researcher (Default Tenant)
+        self.login("researcher", RESEARCHER_PASSWORD)
+        WebDriverWait(driver, 10).until(
+            EC.text_to_be_present_in_element((By.ID, "status-text"), "Connected")
+        )
+        
+        # 5. Submit same query for patient 1
+        input_box = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "user-input"))
+        )
+        self.driver.execute_script("arguments[0].focus();", input_box)
+        time.sleep(0.5)
+        input_box.clear()
+        input_box.send_keys("SELECT full_name FROM patients WHERE patient_id = 1;")
+        time.sleep(0.5)
+        
+        send_btn = driver.find_element(By.ID, "send-button")
+        send_btn.click()
+        
+        # Wait for results
+        time.sleep(8)
+        
+        # 6. Assert standard/default patient name is returned (not Tenant B)
+        result_table = WebDriverWait(driver, 45).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "result-table"))
+        )
+        self.assertTrue(result_table.is_displayed())
+        self.assertNotIn("T***** B P******", result_table.text)
+        self.log("-> SUCCESS: Dynamic tenant database routed correctly to ehr_data.db for default tenant.")
+        
+        self._test_has_failed = False
+        self.logout()
+
 if __name__ == "__main__":
     unittest.main()

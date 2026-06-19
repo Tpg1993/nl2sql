@@ -21,17 +21,17 @@ DEMO_USERS = {
     "admin": {
         "password_hash": get_password_hash(os.environ.get("ADMIN_PASSWORD", "admin123")),
         "role": "admin",
-        "attributes": {}
+        "attributes": {"tenant_id": "default"}
     },
     "doctor": {
         "password_hash": get_password_hash(os.environ.get("DOCTOR_PASSWORD", "doctor123")),
         "role": "doctor",
-        "attributes": {"department_id": 1}
+        "attributes": {"tenant_id": "tenant_b", "department_id": 1}
     },
     "researcher": {
         "password_hash": get_password_hash(os.environ.get("RESEARCHER_PASSWORD", "researcher123")),
         "role": "researcher",
-        "attributes": {}
+        "attributes": {"tenant_id": "default"}
     }
 }
 
@@ -41,7 +41,7 @@ if admin_env_username and admin_env_username != "admin":
     DEMO_USERS[admin_env_username] = {
         "password_hash": get_password_hash(os.environ.get("ADMIN_PASSWORD", "admin123")),
         "role": "admin",
-        "attributes": {}
+        "attributes": {"tenant_id": "default"}
     }
 
 def get_select_columns(sql: str) -> list:
@@ -415,6 +415,10 @@ def add_expert_override(req: OverrideRequest, current_user: dict = Depends(get_c
             import hashlib
             q_hash = hashlib.sha256(req.question.lower().strip().encode("utf-8")).hexdigest()
             cache_manager.delete(q_hash)
+            for t in ["tenant_b", "default"]:
+                t_src = f"{req.question.lower().strip()}:{t}"
+                t_hash = hashlib.sha256(t_src.encode("utf-8")).hexdigest()
+                cache_manager.delete(t_hash)
         return {"success": True, "message": "Expert query override recorded."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1001,9 +1005,11 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
 
     start_time = time.perf_counter()
 
+    tenant_id = current_user.get("attributes", {}).get("tenant_id")
+
     # 1. Attempt to serve from Cache
     if cache_manager:
-        cached = cache_manager.get(query_req.question)
+        cached = cache_manager.get(query_req.question, tenant_id=tenant_id)
         if cached:
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
             cached_tokens = cached.get("tokens") or {}
@@ -1117,7 +1123,8 @@ def run_query(request: Request, query_req: QueryRequest, current_user: dict = De
                 query=res["query"],
                 result=parsed_data,
                 summary=conversational_summary,
-                tokens=cached_tokens_payload
+                tokens=cached_tokens_payload,
+                tenant_id=tenant_id
             )
 
         # Apply dynamic masking on raw parsed data before returning to this specific user
