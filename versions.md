@@ -15,7 +15,7 @@ This document tracks the feature additions, database routing, model integrations
 *   **Release Focus**: Federated Query Sub-Query Caching to reduce execution costs and network latency.
 *   **Sub-Query Caching**: Caches decomposed query results for remote databases (like Snowflake or Databricks SQL Warehouses) using SQL statement hash keys.
 *   **Dual SQLite/Redis Backend**: Supports both local SQLite (`sql_cache` table) and distributed Redis (`nl2sql:sql_cache:*` namespace) cache stores.
-*   **Verification**: Verified via dedicated E2E unit tests ([test_federated_cache.py](file:///c:/Users/Tejas/Downloads/APPS/NL2SQL/tests/test_federated_cache.py)) asserting cache stores, hit validation, TTL expiration, and remote warehouse call bypasses.
+*   **Verification**: Verified via dedicated E2E unit tests ([test_federated_cache.py](tests/test_federated_cache.py)) asserting cache stores, hit validation, TTL expiration, and remote warehouse call bypasses.
 
 ## [v21_sarvam_federated_query_router](#v21_sarvam_federated_query_router)
 *   **Release Focus**: Federated Query Virtualization across multiple SQLite/Cloud Databricks databases.
