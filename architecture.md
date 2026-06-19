@@ -69,6 +69,22 @@ graph TD
 #### 8. **Conversational Summary**
 *   Prompts the LLM with the compliance-masked dataset and original question to output a user-friendly conversational summary.
 
+### 1.2 Specialist Agents & Collaboration Flow
+
+To achieve reliable database translation, security, and optimization, the system coordinates multiple specialized agent personas:
+
+![Specialist Agents Flow Diagram](screenshots/agents_flow_diagram.png)
+
+1. **Input Sanitizer Agent**: Strips names, phone numbers, and SSNs from natural language queries, swapping them with variables to preserve clinical privacy.
+2. **Metadata RAG Agent**: Dynamically indexes the database catalog and pulls relevant tables/ddls to reduce prompt overhead.
+3. **RLHF Override Cache**: Intercepts queries to check if an expert analyst has previously registered a manual SQL correction.
+4. **SQL Generator LLM Agent**: Translates schema contexts, previous errors, and queries into syntactically valid SQL.
+5. **AST Security Auditor**: Audits generated queries using Abstract Syntax Trees to reject any data manipulation commands (`DROP`, `ALTER`, `DELETE`, etc.).
+6. **Query Cost Planner**: Explains SQL queries to block high-cost table scans or cartesian products.
+7. **Federated Query Router**: Decomposes cross-boundary joins, performs semi-join pushdowns, and joins database datasets client-side.
+8. **Compliance Data Masker**: Masks columns containing sensitive data (e.g. email, phone numbers) based on ABAC permissions (e.g. researcher, doctor roles).
+9. **Clinical Summarizer Agent**: Distills masked raw tables into user-friendly clinical summaries.
+
 ---
 
 ## 2. Compliance & Security Framework
