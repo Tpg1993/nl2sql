@@ -31,14 +31,14 @@ This document outlines the planned future enhancements and next-generation featu
 
 ---
 
-## 3. Database Routing & Federated Optimization
+## 3. Database Routing & Federated Optimization [Completed]
 
 ### 3.1 Advanced Join Pushdowns
-* **Parallel Execution**: Execute local SQLite subqueries and remote Databricks queries in parallel threads to reduce round-trip latency on federated queries.
-* **Adaptive Semi-Join Pushdowns**: Automatically choose between standard pushdown constrains and hash-joins based on the cardinality of the candidate join key dataset.
+* [x] **Parallel Execution**: Execute local SQLite subqueries and remote Databricks queries in parallel threads to reduce round-trip latency on federated queries.
+* [x] **Adaptive Semi-Join Pushdowns**: Automatically choose between standard pushdown constrains and hash-joins based on the cardinality of the candidate join key dataset.
 
 ### 3.2 Dynamic Database Engine Routing
-* **Multi-tenant Routing**: Dynamically switch the target database connection URL based on the authenticated user's organization or tenant ID decoded from the JWT token.
+* [x] **Multi-tenant Routing**: Dynamically switch the target database connection URL based on the authenticated user's organization or tenant ID decoded from the JWT token.
 
 ---
 
