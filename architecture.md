@@ -1,6 +1,6 @@
 # System Architecture & API Catalog
 
-This document details the agentic architecture, compliance framework, and backend API endpoints of the EHR NL2SQL Query System.
+This document details the agentic architecture, compliance framework, and backend API endpoints of the NL2SQL Query System.
 
 ![System Architecture Diagram](screenshots/architecture_diagram.png)
 
@@ -75,15 +75,15 @@ To achieve reliable database translation, security, and optimization, the system
 
 ![Specialist Agents Flow Diagram](screenshots/agents_flow_diagram.png)
 
-1. **Input Sanitizer Agent**: Strips names, phone numbers, and SSNs from natural language queries, swapping them with variables to preserve clinical privacy.
+1. **Input Sanitizer Agent**: Strips names, phone numbers, and SSNs from natural language queries, swapping them with variables to preserve data privacy.
 2. **Metadata RAG Agent**: Dynamically indexes the database catalog and pulls relevant tables/ddls to reduce prompt overhead.
 3. **RLHF Override Cache**: Intercepts queries to check if an expert analyst has previously registered a manual SQL correction.
 4. **SQL Generator LLM Agent**: Translates schema contexts, previous errors, and queries into syntactically valid SQL.
 5. **AST Security Auditor**: Audits generated queries using Abstract Syntax Trees to reject any data manipulation commands (`DROP`, `ALTER`, `DELETE`, etc.).
 6. **Query Cost Planner**: Explains SQL queries to block high-cost table scans or cartesian products.
 7. **Federated Query Router**: Decomposes cross-boundary joins, performs semi-join pushdowns, and joins database datasets client-side.
-8. **Compliance Data Masker**: Masks columns containing sensitive data (e.g. email, phone numbers) based on ABAC permissions (e.g. researcher, doctor roles).
-9. **Clinical Summarizer Agent**: Distills masked raw tables into user-friendly clinical summaries.
+8. **Compliance Data Masker**: Masks columns containing sensitive data (e.g. email, phone numbers) based on ABAC permissions (e.g. dynamic user roles).
+9. **Conversational Summarizer Agent**: Distills masked raw tables into user-friendly natural language summaries.
 
 ---
 
@@ -93,8 +93,8 @@ The compliance layer (`backend/semantic_layer.py`) governs data redaction based 
 
 1.  **Clearance Roles**:
     *   `admin`: Unrestricted database access and configuration privileges.
-    *   `doctor`: Field-level masking rules (e.g., financial columns redacted). Applies **ABAC (Attribute-Based Access Control)** matching patient departments to the doctor's department (unmatched patient fields are masked).
-    *   `researcher`: Column-level masking rules (e.g., `pii_name` masked with initials, `pii_dob` masked, phone and email masked, financial fields redacted).
+    *   `Restricted Role`: Field-level masking rules (e.g., financial columns redacted). Applies **ABAC (Attribute-Based Access Control)** matching organizational metadata to the user's specific access attributes (unmatched fields are masked).
+    *   `Analyst Role`: Column-level masking rules (e.g., identity names masked with initials, dates of birth masked, phone and email masked, financial fields redacted).
 2.  **Audit Ledger**:
     *   `backend/audit_ledger.py` records every executed query in `backend/audit_ledger.db` with columns for username, role, latency, prompt, SQL statement, and result hashes.
     *   The ledger maintains an **immutable cryptographic hash chain** (similar to a blockchain block registry) to prevent tampering.
