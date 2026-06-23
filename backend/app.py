@@ -362,7 +362,7 @@ class OverrideRequest(BaseModel):
 @limiter.limit("100/minute")
 def login(request: Request, login_req: LoginRequest):
     """Authenticate credentials and return a signed JWT token with role claims."""
-    print(f"\n[Auth Debug] Attempt: username='{login_req.username}', password='{login_req.password}'")
+    print(f"\n[Auth Debug] Attempt: username='{login_req.username}'")
     
     if login_req.username not in DEMO_USERS:
         raise HTTPException(
